@@ -104,7 +104,8 @@ back to the browser voice. Evaluation jobs run in batch mode (they wait for quot
 3. **Voice pane → Start call.** Payal opens with:
    *“…aapne abhi thodi der pehle WhatsApp par poochha tha — ‘Premium plan ka charges kitna hai?’ — usi ke baare mein…”*
    Untick **Bot memory on** and call again to hear today's cold script for comparison.
-4. **Talk** (hold the mic button) or type: “Kal 4 baje theek hai”. Then **End & save** — the outcome is
+4. **Just talk** — the call is hands-free like a phone call: the mic stays open, Payal answers when you pause, and
+   stops the moment you start speaking over her (barge-in). Say “Kal 4 baje theek hai” (or type it). Then **End call** — the outcome is
    summarised and written back; the WhatsApp thread closes, the meeting appears under *Open threads*.
 5. Back on **WhatsApp**: the next reply already knows about the call. That's a conversation resumed across two channels.
 6. Switch the chat pane from **WhatsApp** to **App chat** or **Web chat** and type “Kal subah 11 baje call karna” —
@@ -175,7 +176,8 @@ tests/          pytest suite
 | `Store is empty` | run `python -m gcx setup` |
 | Port busy | `python -m gcx serve --port 8010` |
 | No voice in offline mode | use Chrome/Edge; Safari/Firefox lack Hindi browser voices — or add the Sarvam key |
-| Mic button disabled | offline mode needs Chrome's speech recognition; with a Sarvam key any browser works (allow mic) |
+| “Microphone blocked” in the call | allow the mic from the lock icon next to the address bar (Windows: Settings → Privacy → Microphone). Offline mode needs Chrome's speech recognition; with a Sarvam key any browser works |
+| Payal stops by herself while speaking | her own voice from the speakers is being heard as you interrupting — use headphones (echo cancellation helps but laptop speakers can still leak) |
 | Sarvam errors | the footer shows the last error; `GET /api/status` → `modes.last_error`. The demo keeps working offline |
 
 Data note: the dataset contains real business names; it stays on IndiaMART machines per the hackathon rules.

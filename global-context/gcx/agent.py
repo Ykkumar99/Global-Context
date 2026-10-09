@@ -34,6 +34,8 @@ Rules:
 - If they asked not to be called, apologise, confirm opt-out and end.
 - If busy, offer a callback time and end. If not interested, thank them and end. Never argue.
 - Never invent prices, plan names, numbers or promises. For pricing say the executive will share exact plans.
+- Never promise when the executive will call from old notes in the context; ask the caller which day and time suits
+  them now.
 - Privacy: never reveal another buyer's or seller's name, phone number, messages or quoted prices. Refer to them
   only generically ("ek buyer ne Mumbai se enquiry bheji hai").
 - If the CONTEXT says cold_start / no history, do not pretend to know them: introduce yourself and ask one open question.
@@ -122,24 +124,47 @@ def detect_mood(text: str) -> str:
     return "neutral"
 
 
-def detect_lang(text: str, hint: str | None = None) -> str:
-    """Language of what the user just said: Indic script -> that language; Roman script -> Hinglish if it uses
-    Hindi words, else English. ``hint`` (e.g. Saaras' language_code) breaks ties such as Devanagari Marathi."""
+_MR_WORDS = set("आहे आहेत नाही नको काय कसं कसे मला मी तुम्ही तुमचा तुमची तुमचं तुला माझं माझा माझी आणि होय झालं "
+                "झाला बघितलं सांगा करतो करते करायचं आम्ही वाजता वाजताची संध्याकाळी उद्या आहात".split())
+_HI_WORDS = set("है हैं नहीं क्या मुझे मेरा मेरी आप आपका आपको और लेकिन हाँ हां कल बजे करो ठीक चाहिए था थी रहा रही "
+                "हूँ हूं बोलिए बताइए दो दीजिए".split())
+
+
+def detect_lang(text: str, hint: str | None = None, current: str | None = None) -> str:
+    """Language of what the caller just said, kept stable across a call.
+
+    ``hint`` is the speech-to-text guess, ``current`` the language the call is in. Indic scripts other than
+    Devanagari are unambiguous. Devanagari Hindi vs Marathi is not: Saaras once turned a Hindi "nahi, thank you"
+    into Marathi "नाही" (mr-IN) and the whole call flipped to Marathi — so we switch only on clear evidence
+    (STT says mr-IN, 4+ words, 2+ Marathi-only words, no Hindi words). Very short replies never change language."""
+    current = current or "hi-IN"
     counts: dict[str, int] = {}
     for ch in text or "":
         o = ord(ch)
         for code, lo, hi in _SCRIPTS:
             if lo <= o <= hi:
                 counts[code] = counts.get(code, 0) + 1
+    tokens = re.findall(r"[\wऀ-෿']+", text or "")
     if counts:
         code = max(counts, key=counts.get)
-        return hint if code == "hi-IN" and hint == "mr-IN" else code
+        if code != "hi-IN":
+            return code
+        words = [t.strip("।.,?!") for t in tokens]
+        mr = sum(w in _MR_WORDS for w in words)
+        hi = sum(w in _HI_WORDS for w in words)
+        if current == "mr-IN":  # a Marathi call stays Marathi unless the caller clearly speaks Hindi
+            return "hi-IN" if hi >= 2 and mr == 0 else "mr-IN"
+        if hint == "mr-IN" and len(words) >= 4 and mr >= 2 and hi == 0:
+            return "mr-IN"
+        return "hi-IN"
     words = re.findall(r"[A-Za-z']+", text or "")
     if not words:
-        return hint or "hi-IN"
+        return current
     if len(_HINGLISH.findall(text)) / len(words) >= 0.15:
         return "hi-IN"
-    return "en-IN" if len(words) >= 2 or hint == "en-IN" else (hint or "hi-IN")
+    if len(words) < 4:  # "ok", "thank you", "yes sure" — too short to be a language switch
+        return current
+    return "en-IN"
 
 
 class Agent:

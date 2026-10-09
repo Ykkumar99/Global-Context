@@ -28,10 +28,19 @@ as_of: null                  # optional fixed ISO timestamp, e.g. 2026-10-02T23:
 sarvam:
   base_url: https://api.sarvam.ai
   chat_model: sarvam-105b
-  tts_model: bulbul:v3
-  tts_speaker: priya          # female voice for "Payal"; try: ritu, neha, kavya
+  tts_model: bulbul:v4-flash   # conversational voices: more natural and faster than v3
+  tts_fallback_model: bulbul:v3
+  tts_speaker: priya           # v3 voice, used for languages without a v4 female voice and as fallback
+  tts_voices:                  # Payal's voice per language (Hindi + English share one person)
+    hi-IN: ritu_hi_customer_warm
+    en-IN: ritu_hi_customer_warm
+    gu-IN: pooja_gu_conversational
+    mr-IN: ishita_mr_conversational
+    bn-IN: roopa_bn_conversational
+    te-IN: kavitha_te_conversation
+    kn-IN: chaitra_kn_conversation
   tts_language: hi-IN
-  tts_pace: 1.05
+  tts_pace: 1.0
   stt_model: saaras:v4
   stt_mode: codemix           # Hinglish-friendly output
   timeout_sec: 20

@@ -244,7 +244,11 @@ def test_reply_language_follows_the_user():
     assert detect_lang("Haan boliye, kitna charge lagega?") == "hi-IN"
     assert detect_lang("जी नहीं वो meeting तो नहीं हो पाई।") == "hi-IN"
     assert detect_lang("હા, કાલે સાંજે ચાર વાગ્યે ફોન કરજો") == "gu-IN"
-    assert detect_lang("माझं नाव राहुल आहे", "mr-IN") == "mr-IN"
+    assert detect_lang("माझं नाव राहुल आहे आणि मला", "mr-IN") == "mr-IN"
+    # from a real call: Saaras heard Hindi "nahi, thank you" as Marathi "नाही" (mr-IN) and the call flipped to Marathi
+    assert detect_lang("नाही thank you", "mr-IN", current="hi-IN") == "hi-IN"
+    assert detect_lang("मराठी बघितलं तुला?", "mr-IN", current="hi-IN") == "hi-IN"
+    assert detect_lang("ok thank you", "en-IN", current="hi-IN") == "hi-IN"  # too short to switch
 
 
 def test_rate_limiter_stays_under_plan_limit():

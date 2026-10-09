@@ -142,7 +142,7 @@ const call = {
   noise: 0.008, inSpeech: false, voicedMs: 0, silentMs: 0, frames: [], pre: [], preMs: 0, sr: 48000,
   audio: null, timer: null, t0: 0, lastBot: null, pace: null,
 };
-const VAD = { startMs: 140, bargeMs: 260, endMs: 750, preRollMs: 350, maxMs: 15000, minMs: 350 };
+const VAD = { startMs: 140, bargeMs: 200, endMs: 750, preRollMs: 1000, maxMs: 15000, minMs: 350 };
 const PHASE_TEXT = {
   idle: "Ready to call", connecting: "Connecting…", listening: "Listening…", user: "You're speaking…",
   thinking: "Payal is thinking…", speaking: "Payal is speaking — just talk to interrupt", ended: "Call ended",
@@ -312,15 +312,19 @@ function onFrame(d) {
   const rms = Math.sqrt(sum / d.length);
   showLevel(rms);
   if (call.muted || !state.inCall || call.phase === "connecting" || call.phase === "ended") return;
-  if (!call.inSpeech) call.noise = Math.min(0.05, Math.max(0.002, call.noise * 0.97 + rms * 0.03));
+  // noise floor = min-tracker: follows quiet frames down quickly, creeps up very slowly, so the caller's own
+  // first syllables can never inflate it (that delayed barge-in by ~2 s in testing)
+  if (!call.inSpeech) call.noise = Math.min(0.03, Math.max(0.002,
+    rms < call.noise ? call.noise * 0.85 + rms * 0.15 : call.noise * 0.998 + rms * 0.002));
   // while Payal talks, demand a clearly louder voice so her own audio (speaker echo) does not interrupt her
   const talking = call.phase === "speaking";
-  const thr = talking ? Math.max(0.045, call.noise * 5) : Math.max(0.014, call.noise * 2.8);
+  const thr = talking ? Math.max(0.035, call.noise * 4) : Math.max(0.014, call.noise * 2.8);
   const voiced = rms > thr;
   if (!call.inSpeech) {
     call.pre.push(d); call.preMs += ms;
     while (call.preMs > VAD.preRollMs && call.pre.length > 1) call.preMs -= (call.pre.shift().length / call.sr) * 1000;
-    call.voicedMs = voiced ? call.voicedMs + ms : 0;
+    // short gaps between syllables only leak the counter instead of resetting it
+    call.voicedMs = voiced ? call.voicedMs + ms : Math.max(0, call.voicedMs - ms * 0.5);
     if (call.voicedMs >= (talking || call.phase === "thinking" ? VAD.bargeMs : VAD.startMs)) {
       call.inSpeech = true; call.silentMs = 0;
       call.frames = call.pre.slice(); call.pre = []; call.preMs = 0;

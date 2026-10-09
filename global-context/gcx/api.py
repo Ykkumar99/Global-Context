@@ -298,7 +298,8 @@ def whatsapp(m: ChatIn):
 class CallIn(BaseModel):
     glid: int
     use_context: bool = True
-    lang: str = "hi-IN"
+    lang: str = "hi-IN"          # the language the call is in right now
+    stt_lang: str | None = None  # speech-to-text's guess for this turn (only a hint)
     history: list[dict] = []
     text: str | None = None
     tts: bool = True
@@ -319,7 +320,8 @@ def call_turn(c: CallIn):
     if not c.text:
         raise HTTPException(400, "text required (or use /api/call/turn-audio)")
     t0 = time.time()
-    lang = detect_lang(c.text, hint=c.lang)  # follow the language the user just spoke, turn by turn
+    # follow the caller's language turn by turn, but never flip on one short or ambiguous turn
+    lang = detect_lang(c.text, hint=c.stt_lang or c.lang, current=c.lang)
     mood = detect_mood(c.text)               # and their mood: tone, length and speaking pace adapt
     r = agent.reply(c.glid, c.history, c.text, use_context=c.use_context, lang=lang, mood=mood)
     t1 = time.time()
@@ -340,9 +342,8 @@ async def call_turn_audio(glid: int = Form(...), use_context: bool = Form(True),
     if not stt or not stt.get("transcript"):
         return JSONResponse({"error": "speech not recognised", "detail": sarvam.last_error}, status_code=422)
     t1 = time.time()
-    spoken = stt.get("language_code") or lang  # Saaras' guess is the hint; detect_lang also reads the transcript
     res = call_turn(CallIn(glid=glid, use_context=use_context, history=json.loads(history), text=stt["transcript"],
-                           lang=spoken, tts=tts))
+                           lang=lang, stt_lang=stt.get("language_code"), tts=tts))
     res.update(stt_ms=round((t1 - t0) * 1000), language=stt.get("language_code"))
     return res
 

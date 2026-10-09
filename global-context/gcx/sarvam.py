@@ -216,30 +216,41 @@ class Sarvam:
         except (wave.Error, EOFError):
             return self._tts_one(text, speaker, language, pace)
 
+    def _voice(self, lang: str, speaker: str | None) -> tuple[str, str]:
+        """(model, speaker) for a language: Bulbul v4-flash conversational voices where one exists (more natural
+        and faster), else the v3 voice. Hindi and English share one speaker so a language switch keeps the person."""
+        voices = self.s.get("tts_voices") or {}
+        if speaker:
+            return self.s.get("tts_fallback_model", "bulbul:v3"), speaker.lower()
+        if lang in voices:
+            return self.s.get("tts_model", "bulbul:v4-flash"), voices[lang]
+        return self.s.get("tts_fallback_model", "bulbul:v3"), self.s.get("tts_speaker", "priya")
+
     def _tts_one(self, text: str, speaker: str | None = None, language: str | None = None,
                  pace: float | None = None) -> bytes | None:
         lang = language or self.s.get("tts_language", "hi-IN")
-        base = {"text": text[:2400], "speaker": (speaker or self.s.get("tts_speaker", "priya")).lower(),
-                "model": self.s.get("tts_model", "bulbul:v3"), "pace": pace or self.s.get("tts_pace", 1.0)}
-        variants = [dict(base, language_code=lang), dict(base, target_language_code=lang),
-                    {**{k: v for k, v in base.items() if k != "text"}, "inputs": [base["text"]],
-                     "target_language_code": lang}]
+        model, spk = self._voice(lang, speaker)
+        plan = [(model, spk)]
+        if model != self.s.get("tts_fallback_model", "bulbul:v3"):  # v4 voice rejected -> same text on v3
+            plan.append((self.s.get("tts_fallback_model", "bulbul:v3"), self.s.get("tts_speaker", "priya")))
         t0 = time.perf_counter()
-        for body in variants:  # API field names changed across Bulbul versions
+        for model, spk in plan:
+            body = {"text": text[:2400], "speaker": spk, "model": model, "target_language_code": lang,
+                    "pace": pace or self.s.get("tts_pace", 1.0)}
             if not self.limits["tts"].acquire(wait=4):
-                self.last_error = "TTS: local rate limit reached (bulbul:v3 30/min) — browser voice used"
+                self.last_error = "TTS: local rate limit reached — browser voice used"
                 self.stats["rate_limited"] += 1
                 return None
             try:
                 r = requests.post(f"{self.base}/text-to-speech", json=body, headers=self._headers(),
                                   timeout=self.timeout)
-                if r.status_code == 429:  # other field-name variants would only burn more quota
+                if r.status_code == 429:  # a retry would only burn more quota
                     self.limits["tts"].saturate()
                     self.stats["rate_limited"] += 1
                     self.last_error = f"TTS 429: {r.text[:160]}"
                     return None
                 if r.status_code >= 400:
-                    self.last_error = f"TTS {r.status_code}: {r.text[:200]}"
+                    self.last_error = f"TTS {r.status_code} ({model}/{spk}): {r.text[:200]}"
                     continue
                 audios = r.json().get("audios") or []
                 if audios:

@@ -39,7 +39,7 @@ WhatsApp question instead of the generic pitch.
 | | |
 |---|---|
 | Platform | Sarvam Samvaad (indus.sarvam.ai → Voice Agents) |
-| Agent | **Payal - Global Context** · ID `Payal---Glo-b7f05376-3920` · v1 |
+| Agent | **Payal - Global Context** · ID `Payal---Glo-ed092fb2-9b6f` · v1 · organisation **Vishwas's Organisation** (team credits). An earlier copy `Payal---Glo-b7f05376-3920` exists in Yatharth's Organisation and is no longer used |
 | Voice | Ritu - Sales Agent (Bulbul, female, Hindi), speed 1.15, starts in Hindi, switches language with the caller |
 | Input variables | `glid` (default 146010610), `context`, `opening`, `language` (fallbacks if the tool fails) |
 | Greeting | `{opening}` — the personalised line from the memory file |
