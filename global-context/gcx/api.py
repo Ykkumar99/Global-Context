@@ -1,0 +1,427 @@
+"""FastAPI service: context API for any consumer + the cross-channel demo.
+
+Context API (reusable beyond the bot)
+  GET  /context/{glid}.md            the file, text/markdown (what the bot loads)
+  GET  /api/context/{glid}           JSON: md, version, tokens, sections
+  POST /api/events                   push new activity -> incremental refresh
+  GET  /api/metrics                  freshness + build stats
+  GET  /api/stream                   server-sent events: live file updates
+
+Sarvam Voice Agent hooks (configure as HTTPS tools on the agent)
+  GET  /sarvam/context?glid=...      on_start: returns context + opening line
+  POST /sarvam/call-ended            on_end: writes the call outcome back
+
+Demo
+  /                                   3-pane UI (WhatsApp · live seller.md · voice call)
+"""
+from __future__ import annotations
+
+import asyncio
+import base64
+import hmac
+import json
+import os
+import threading
+import time
+from collections import deque
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+
+from . import __version__
+from . import seller_sections as S
+from .agent import MOOD_PACE, Agent, detect_lang, detect_mood
+from .config import ROOT, get_config
+from .engine import ContextEngine
+from .sarvam import client as sarvam_client
+from .textutil import clean
+
+cfg = get_config()
+engine = ContextEngine()
+agent = Agent(engine)
+sarvam = sarvam_client()
+
+_loop: asyncio.AbstractEventLoop | None = None
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    global _loop
+    _loop = asyncio.get_running_loop()
+    if engine.store.event_count() == 0:
+        print("  ! Store is empty — run `python -m gcx setup` first.")
+    yield
+
+
+app = FastAPI(title="Global Context — VANI memory layer", version=__version__, lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+WEB = ROOT / "web"
+app.mount("/static", StaticFiles(directory=WEB), name="static")
+
+
+@app.middleware("http")
+async def tunnel_guard(request: Request, call_next):
+    """Requests arriving through a public tunnel (Cloudflare adds cf-connecting-ip) may only reach the Sarvam
+    Voice Agent hooks, and only with GCX_TUNNEL_TOKEN — so nobody on the internet can browse the demo data or
+    spend the team's Sarvam credits through the other routes. Local use is unaffected."""
+    if request.headers.get("cf-connecting-ip"):
+        token = os.environ.get("GCX_TUNNEL_TOKEN", "")
+        given = request.query_params.get("token") or request.headers.get("x-gcx-token", "")
+        if not (request.url.path.startswith("/sarvam/") and token and hmac.compare_digest(given, token)):
+            return JSONResponse({"error": "not available through the public tunnel"}, status_code=403)
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def no_stale_ui(request: Request, call_next):
+    """Demo UI files change between builds — always revalidate so nobody sees an old app.js."""
+    resp = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+FEATURED_PATH = ROOT / "data" / "demo" / "featured.json"
+
+# --------------------------------------------------------------- live push
+_subscribers: set[asyncio.Queue] = set()
+_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _push(glid: int, payload: dict) -> None:
+    if _loop is None:
+        return
+    data = json.dumps({k: v for k, v in payload.items() if k != "dropped"}, default=str)
+    for q in list(_subscribers):
+        _loop.call_soon_threadsafe(q.put_nowait, data)
+
+
+engine.listeners.append(_push)
+
+
+# ------------------------------------------- opener pre-warm (voice latency)
+# The opener depends only on the file, so its text + Bulbul audio are prepared in the background as soon as a user
+# is opened or their file changes. "Start call" then plays immediately instead of waiting ~5 s for LLM + TTS.
+_open_cache: dict[tuple[int, bool], tuple[int, dict, str | None]] = {}
+_open_locks: dict[tuple[int, bool], threading.Lock] = {}
+_recent: deque = deque(maxlen=20)  # users opened recently — only these are pre-warmed on file changes
+
+
+def _opening_with_audio(glid: int, use_context: bool, tts: bool = True) -> tuple[dict, str | None, bool]:
+    key = (glid, use_context)
+    lock = _open_locks.setdefault(key, threading.Lock())
+    with lock:  # a call that starts while the pre-warm is running waits for it instead of doing the work twice
+        h = hash(engine.get(glid)["md"]) if use_context else 0
+        hit = _open_cache.get(key)
+        if hit and hit[0] == h and (hit[2] or not tts):
+            return hit[1], hit[2], True
+        op = agent.opening(glid, use_context)
+        audio = _tts_b64(op["text"], op["lang"]) if tts else None
+        _open_cache[key] = (h, op, audio)
+        return op, audio, False
+
+
+def _prewarm(glid: int) -> None:
+    if sarvam.mode()["tts"] != "sarvam" or sarvam.budget("tts") < 10:
+        return  # offline (opener is instant anyway) or TTS quota needed for live calls (bulbul:v3 30/min)
+
+    def run():
+        try:  # memory-on opener only; the memory-off comparison is generated on demand
+            _opening_with_audio(glid, True)
+        except Exception:  # pre-warm is best-effort; the call path recomputes on demand
+            pass
+    threading.Thread(target=run, daemon=True).start()
+
+
+def _prewarm_on_change(glid: int, payload: dict) -> None:
+    if glid in _recent and payload.get("type") == "doc":
+        _prewarm(glid)
+
+
+engine.listeners.append(_prewarm_on_change)
+
+
+@app.get("/api/stream")
+async def stream(request: Request):
+    q: asyncio.Queue = asyncio.Queue()
+    _subscribers.add(q)
+
+    async def gen():
+        try:
+            yield "retry: 2000\n\n"
+            while not await request.is_disconnected():
+                try:
+                    msg = await asyncio.wait_for(q.get(), timeout=15)
+                    yield f"data: {msg}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": ping\n\n"
+        finally:
+            _subscribers.discard(q)
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+# ---------------------------------------------------------------- helpers
+def _need(glid: int) -> None:
+    """Unknown GLIDs are allowed: they get a cold-start file, and their first event creates a profile."""
+    if glid <= 0:
+        raise HTTPException(400, "GLID must be a positive integer")
+
+
+def _tts_b64(text: str, lang: str | None = None, pace: float | None = None) -> str | None:
+    audio = sarvam.tts(text, language=lang, pace=pace)
+    return base64.b64encode(audio).decode() if audio else None
+
+
+COLD_DEMO_GLID = 999000001
+
+
+def _label(glid: int) -> dict:
+    prof = engine.store.profile(glid)
+    if prof is None or prof[1].get("new_user"):
+        return {"glid": glid, "role": prof[0] if prof else "unknown", "name": "New contact (no history)", "city": "",
+                "what": "cold start"}
+    role, p = prof
+    if role == "seller":
+        return {"glid": glid, "role": role, "name": clean(p.get("company_name")), "city": clean(p.get("seller_city")),
+                "what": clean(p.get("top_category_1"))}
+    k = p.get("kycdetails") or {}
+    return {"glid": glid, "role": role, "name": clean(k.get("customer_name")) or clean(k.get("company_name")),
+            "city": clean(k.get("city")), "what": clean(k.get("company_name"))}
+
+
+# -------------------------------------------------------------- core API
+@app.get("/")
+def index():
+    return FileResponse(WEB / "index.html")
+
+
+@app.get("/api/status")
+def status():
+    stats = engine.store.get_meta("ingest_stats", {})
+    return {"version": __version__, "modes": sarvam.mode(), "as_of": str(engine.now())[:19],
+            "events": engine.store.event_count(), "ingest": stats, "token_budget": engine.budget,
+            "sarvam_stats": sarvam.stats}
+
+
+@app.get("/api/users")
+def users(role: str | None = None, q: str | None = None, limit: int = 40):
+    featured = json.loads(FEATURED_PATH.read_text()) if FEATURED_PATH.exists() else {}
+    ids = [g for g in featured.get(role or "seller", []) if engine.role(g)] if not q else []
+    if q:
+        rows = engine.store.conn().execute(
+            "SELECT glid FROM profiles WHERE (?1 IS NULL OR role=?1) AND (CAST(glid AS TEXT) LIKE ?2 OR data LIKE ?3) "
+            "LIMIT ?4", (role, f"{q}%", f"%{q}%", limit)).fetchall()
+        ids = [r[0] for r in rows]
+    if len(ids) < limit and not q:
+        ids += [g for g in engine.store.glids(role) if g not in ids][: limit - len(ids)]
+    out = [_label(g) for g in ids[:limit]]
+    if not q and (role in (None, "seller")):
+        out.append(_label(COLD_DEMO_GLID))  # demo: a brand-new user with no history on any channel
+    return out
+
+
+@app.get("/context/{glid}.md", response_class=PlainTextResponse)
+def context_md(glid: int):
+    return PlainTextResponse(engine.get(glid)["md"], media_type="text/markdown; charset=utf-8")
+
+
+@app.get("/api/context/{glid}")
+def context_json(glid: int, rebuild: bool = False):
+    if glid not in _recent:
+        _recent.append(glid)
+    _prewarm(glid)
+    if engine.role(glid) is None:
+        return {**engine.cold_doc(glid), "sections": {}, "label": _label(glid)}
+    d = engine.build(glid) if rebuild else engine.get(glid)
+    secs = {k: json.loads(v) for k, v in engine.store.sections(glid).items() if not k.startswith("_")}
+    return {**{k: v for k, v in d.items() if k != "dropped"}, "sections": secs, "label": _label(glid)}
+
+
+class EventIn(BaseModel):
+    glid: int
+    channel: str = Field(..., examples=["wa_chat"])
+    kind: str | None = "typed"
+    text: str | None = None
+    meta: dict | None = None
+
+
+@app.post("/api/events")
+def push_event(e: EventIn):
+    _need(e.glid)
+    d = engine.on_event(e.glid, e.channel, e.kind, e.text, {**(e.meta or {}), "live": 1})
+    return {k: v for k, v in d.items() if k != "dropped"}
+
+
+@app.get("/api/metrics")
+def metrics():
+    rows = engine.store.freshness_rows()
+    det = [(r["doc_at"] - r["received_at"]) * 1000 for r in rows if r["doc_at"] and r["received_at"]]
+    llm = [(r["llm_at"] - r["received_at"]) * 1000 for r in rows if r["llm_at"] and r["received_at"]]
+
+    def pctl(xs, p):
+        return round(sorted(xs)[min(len(xs) - 1, int(p * len(xs)))], 1) if xs else None
+
+    return {"live_events": len(rows),
+            "deterministic_ms": {"p50": pctl(det, .5), "p95": pctl(det, .95)},
+            "llm_enriched_ms": {"p50": pctl(llm, .5), "p95": pctl(llm, .95)},
+            "sarvam": sarvam.stats, "modes": sarvam.mode()}
+
+
+# ------------------------------------------------------ channels: WhatsApp
+class ChatIn(BaseModel):
+    glid: int
+    text: str
+    history: list[dict] = []
+    use_context: bool = True
+    channel: str = "wa_chat"  # wa_chat | app_chat | web_chat — all write to the same memory file
+
+
+@app.post("/api/whatsapp")
+@app.post("/api/chat")
+def whatsapp(m: ChatIn):
+    _need(m.glid)
+    if m.channel not in S.CHAT_CHANNELS:
+        raise HTTPException(400, f"channel must be one of {', '.join(S.CHAT_CHANNELS)}")
+    t0 = time.time()
+    doc = engine.on_event(m.glid, m.channel, "typed", m.text, {"live": 1, "intent": "live_demo"})
+    r = agent.reply(m.glid, m.history, m.text, use_context=m.use_context, channel="whatsapp")
+    engine.store.add_event(m.glid, engine.now(), "wa_bot", "reply", r["text"], {"live": 1}, live=1)
+    return {"reply": r["text"], "engine": r["engine"], "freshness_ms": doc["freshness_ms"],
+            "version": doc["version"], "ms": round((time.time() - t0) * 1000)}
+
+
+# ---------------------------------------------------------- channels: voice
+class CallIn(BaseModel):
+    glid: int
+    use_context: bool = True
+    lang: str = "hi-IN"
+    history: list[dict] = []
+    text: str | None = None
+    tts: bool = True
+
+
+@app.post("/api/call/start")
+def call_start(c: CallIn):
+    _need(c.glid)
+    t0 = time.time()
+    op, audio, cached = _opening_with_audio(c.glid, c.use_context, c.tts)
+    return {**op, "audio": audio if c.tts else None, "ms": round((time.time() - t0) * 1000), "prewarmed": cached,
+            "modes": sarvam.mode()}
+
+
+@app.post("/api/call/turn")
+def call_turn(c: CallIn):
+    _need(c.glid)
+    if not c.text:
+        raise HTTPException(400, "text required (or use /api/call/turn-audio)")
+    t0 = time.time()
+    lang = detect_lang(c.text, hint=c.lang)  # follow the language the user just spoke, turn by turn
+    mood = detect_mood(c.text)               # and their mood: tone, length and speaking pace adapt
+    r = agent.reply(c.glid, c.history, c.text, use_context=c.use_context, lang=lang, mood=mood)
+    t1 = time.time()
+    pace = MOOD_PACE.get(mood)
+    audio = _tts_b64(r["text"], lang, pace) if c.tts else None
+    return {"user_text": c.text, "text": r["text"], "end": r["end"], "engine": r["engine"], "audio": audio, "lang": lang,
+            "mood": mood, "pace": pace,
+            "llm_ms": round((t1 - t0) * 1000), "tts_ms": round((time.time() - t1) * 1000)}
+
+
+@app.post("/api/call/turn-audio")
+async def call_turn_audio(glid: int = Form(...), use_context: bool = Form(True), history: str = Form("[]"),
+                          lang: str = Form("hi-IN"), tts: bool = Form(True), audio: UploadFile = File(...)):
+    _need(glid)
+    t0 = time.time()
+    raw = await audio.read()
+    stt = sarvam.stt(raw, audio.filename or "audio.webm", audio.content_type or "audio/webm")
+    if not stt or not stt.get("transcript"):
+        return JSONResponse({"error": "speech not recognised", "detail": sarvam.last_error}, status_code=422)
+    t1 = time.time()
+    spoken = stt.get("language_code") or lang  # Saaras' guess is the hint; detect_lang also reads the transcript
+    res = call_turn(CallIn(glid=glid, use_context=use_context, history=json.loads(history), text=stt["transcript"],
+                           lang=spoken, tts=tts))
+    res.update(stt_ms=round((t1 - t0) * 1000), language=stt.get("language_code"))
+    return res
+
+
+@app.post("/api/call/end")
+def call_end(c: CallIn):
+    _need(c.glid)
+    if not c.history:
+        return {"skipped": True}
+    out = agent.end_call(c.glid, c.history)
+    d = out["doc"]
+    return {"summary": out["summary"], "freshness_ms": d["freshness_ms"], "version": d["version"]}
+
+
+@app.post("/api/tts")
+def tts(body: dict):
+    pace = body.get("pace")
+    pace = min(1.3, max(0.8, float(pace))) if pace else None  # mood-adjusted speaking speed
+    return {"audio": _tts_b64(str(body.get("text", "")), body.get("lang") or None, pace), "modes": sarvam.mode()}
+
+
+# ------------------------------------------- non-bot consumers of the same files
+@app.get("/brief/{glid}", response_class=HTMLResponse)
+def exec_brief(glid: int):
+    """Sales-executive call-prep page rendered from the seller.md / buyer.md file itself."""
+    from .reuse import exec_brief_html
+    return HTMLResponse(exec_brief_html(engine.get(glid)["md"]))
+
+
+@app.get("/api/segments")
+def campaign_segments(format: str = "json"):
+    """WhatsApp-campaign / dialer segments computed by reading the .md files only."""
+    from .reuse import SEGMENTS, files_from_dir, segments, segments_csv
+    files = files_from_dir(cfg.path("out_dir") / "seller_md")
+    if format == "csv":
+        return Response(segments_csv(files), media_type="text/csv",
+                        headers={"Content-Disposition": "attachment; filename=segments.csv"})
+    seg = segments(files)
+    return {"files_read": len(files),
+            "segments": {k: {"description": SEGMENTS[k][0], "count": len(v), "sample": v[:10]} for k, v in seg.items()}}
+
+
+# ------------------------------------------------- Sarvam Voice Agent hooks
+@app.get("/sarvam/context")
+def sarvam_context(glid: int):
+    d = engine.get(glid)
+    op = agent.opening(glid, True)
+    return {"glid": glid, "context_md": d["md"], "opening_line": op["text"], "language": op["lang"],
+            "version": d["version"]}
+
+
+class CallEnded(BaseModel):
+    glid: int
+    transcript: str | list | None = None
+    disposition: str | None = None
+    summary: str | None = None
+
+
+@app.post("/sarvam/call-ended")
+def sarvam_call_ended(c: CallEnded):
+    _need(c.glid)
+    if c.summary:
+        d = engine.on_event(c.glid, "voice_call", c.disposition or "General (talked)", c.summary,
+                            {"agent": "Sarvam voice agent", "live": 1})
+        return {"version": d["version"], "freshness_ms": d["freshness_ms"]}
+    tr = c.transcript
+    if isinstance(tr, str) and tr.strip().startswith("["):  # platforms sometimes send the list JSON-encoded
+        try:
+            tr = json.loads(tr)
+        except ValueError:
+            pass
+    lines = tr if isinstance(tr, list) else str(tr or "").splitlines()
+    hist = []
+    for ln in lines:
+        s = ln if isinstance(ln, str) else f"{ln.get('role', '')}: {ln.get('content', '')}"
+        who = "bot" if s.lower().startswith(("agent", "assistant", "bot", "payal")) else "user"
+        hist.append({"who": who, "text": s.split(":", 1)[-1].strip()})
+    hist = [h for h in hist if h["text"]]
+    if not any(h["who"] == "user" for h in hist):  # unanswered / empty call: nothing to remember
+        return {"skipped": True, "reason": "no user speech in transcript"}
+    out = agent.end_call(c.glid, hist, "Sarvam voice agent")
+    return {"summary": out["summary"], "version": out["doc"]["version"]}

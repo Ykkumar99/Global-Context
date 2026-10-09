@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "gcx",
+      "runtimeExecutable": "D:\\Downloads\\global-context-P2-solution\\global-context\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-m", "gcx", "serve", "--port", "8000"],
+      "cwd": "global-context",
+      "port": 8000
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+.venv
+.gcx
+data/raw
+data/full
+__pycache__
+*.pyc
+outputs_full
+.pytest_cache
+outputs_sarvam
+outputs_off

@@ -1,0 +1,12 @@
+.venv/
+.gcx/
+.env
+__pycache__/
+*.pyc
+data/raw/*
+!data/raw/README.md
+data/full/
+outputs_full/
+.pytest_cache/
+outputs_sarvam/
+outputs_off/

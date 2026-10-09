@@ -1,0 +1,202 @@
+{
+  "dataset": "D:/Downloads/global-context-P2-solution/global-context/data/demo",
+  "token_budget": 450,
+  "compactness": {
+    "seller": {
+      "files": 67,
+      "tokens_median": 275,
+      "tokens_p95": 438,
+      "tokens_max": 450,
+      "raw_source_tokens_median": 1131,
+      "compression_median": 3.9,
+      "schema_valid_pct": 100.0,
+      "personalised_opening_pct": 29.9,
+      "section_coverage_pct": {
+        "Suggested opening (Hinglish)": 100.0,
+        "Engagement history": 97.0,
+        "Last conversations": 89.6,
+        "Business pulse (30d | 90d)": 85.1,
+        "Before you speak": 61.2,
+        "Open threads": 25.4
+      }
+    },
+    "buyer": {
+      "files": 237,
+      "tokens_median": 173,
+      "tokens_p95": 327,
+      "tokens_max": 390,
+      "raw_source_tokens_median": 1790,
+      "compression_median": 12.3,
+      "schema_valid_pct": 100.0,
+      "personalised_opening_pct": 84.0,
+      "section_coverage_pct": {
+        "Suggested opening (Hinglish)": 100.0,
+        "Engagement signals": 99.6,
+        "What they are looking for": 84.8,
+        "Before you speak": 40.5,
+        "Last conversations": 8.9
+      }
+    }
+  },
+  "privacy": {
+    "files_checked": 304,
+    "files_quoting_other_party_name": 0,
+    "files_with_phone_or_email": 0,
+    "counterpart_names_known": 772
+  },
+  "freshness": {
+    "replayed_events": 184,
+    "window_days": 3,
+    "sellers_touched": 23,
+    "latency_ms": {
+      "p50": 3.47,
+      "p95": 11.4,
+      "p99": 15.8,
+      "max": 18.87
+    },
+    "latency_ms_by_channel_p50": {
+      "bot_call": 4.04,
+      "buyer_call": 2.81,
+      "buylead": 6.53,
+      "enquiry": 5.38,
+      "enquiry_reply": 3.81,
+      "exec_call": 2.43,
+      "pns_extract": 0.92,
+      "wa_chat": 4.15,
+      "wa_msg": 3.11
+    },
+    "sections_changed_per_event": {
+      "0": 29,
+      "1": 124,
+      "2": 11,
+      "3": 15,
+      "4": 1,
+      "5": 3,
+      "6": 1
+    },
+    "consistency_event_driven_sections_pct": 100.0,
+    "consistency_mismatch_by_section": {},
+    "full_rebuild": {
+      "sellers": 67,
+      "seconds": 0.14,
+      "ms_per_seller": 2.16
+    }
+  },
+  "impact": {
+    "vani_calls_analysed": 151,
+    "capacity_reallocation_estimate": {
+      "calls_suppressed": 40,
+      "calls_suppressed_pct": 26.5,
+      "meetings_lost": 1,
+      "meetings_from_reallocated_capacity": 6,
+      "net_meeting_lift_pct": 28.5,
+      "assumption": "freed dial capacity goes to sellers without these flags at their average meeting rate"
+    },
+    "cold_start_with_cross_channel_activity_7d_pct": 38.4,
+    "cold_start_with_any_history_90d_pct": 82.8,
+    "calls_with_actionable_memory_flag_pct": 43.7,
+    "specific_personalised_opening_possible_pct": 41.7,
+    "outcomes_by_memory_flag": {
+      "ALL": {
+        "calls": 151,
+        "meeting_fixed_pct": 11.9,
+        "not_interested_pct": 41.1,
+        "p_vs_rest_meeting": null
+      },
+      "cross_channel_activity_7d": {
+        "calls": 58,
+        "meeting_fixed_pct": 6.9,
+        "not_interested_pct": 41.4,
+        "p_vs_rest_meeting": 0.1324
+      },
+      "SUPPRESS: fatigue or wrong number": {
+        "calls": 40,
+        "meeting_fixed_pct": 2.5,
+        "not_interested_pct": 42.5,
+        "p_vs_rest_meeting": 0.032
+      },
+      "called_2plus_times_this_week": {
+        "calls": 34,
+        "meeting_fixed_pct": 2.9,
+        "not_interested_pct": 47.1,
+        "p_vs_rest_meeting": 0.0664
+      },
+      "open_thread:unread": {
+        "calls": 20,
+        "meeting_fixed_pct": 0.0,
+        "not_interested_pct": 40.0,
+        "p_vs_rest_meeting": 0.0773
+      },
+      "open_thread:callback": {
+        "calls": 15,
+        "meeting_fixed_pct": 6.7,
+        "not_interested_pct": 33.3,
+        "p_vs_rest_meeting": 0.5082
+      },
+      "open_thread:buyer_waiting": {
+        "calls": 15,
+        "meeting_fixed_pct": 6.7,
+        "not_interested_pct": 26.7,
+        "p_vs_rest_meeting": 0.5082
+      },
+      "wrong_number_on_recent_call": {
+        "calls": 12,
+        "meeting_fixed_pct": 0.0,
+        "not_interested_pct": 16.7,
+        "p_vs_rest_meeting": 0.1841
+      },
+      "PRIORITISE: seller-initiated thread": {
+        "calls": 11,
+        "meeting_fixed_pct": 18.2,
+        "not_interested_pct": 27.3,
+        "p_vs_rest_meeting": 0.5057
+      },
+      "open_thread:wa_callback": {
+        "calls": 9,
+        "meeting_fixed_pct": 22.2,
+        "not_interested_pct": 22.2,
+        "p_vs_rest_meeting": 0.3253
+      },
+      "open_thread:meeting": {
+        "calls": 1,
+        "meeting_fixed_pct": 0.0,
+        "not_interested_pct": 0.0,
+        "p_vs_rest_meeting": 0.712
+      },
+      "open_thread:wa_question": {
+        "calls": 1,
+        "meeting_fixed_pct": 0.0,
+        "not_interested_pct": 100.0,
+        "p_vs_rest_meeting": 0.712
+      }
+    },
+    "transcripts_checked": 10,
+    "seller_redundancy_pushback_calls": 1,
+    "pushback_predictable_from_memory": 0,
+    "pushback_predictable_pct": 0.0,
+    "pushback_examples": [
+      {
+        "glid": 96255123,
+        "seller_said": "Ma'am, already meri paid membership chaalu hai. Uspe hi kuch lead nahi mil rahi hai, uspe hi kuch kaam nahi ho paa raha hai.",
+        "memory_had": [],
+        "disposition": "Meeting Fixed"
+      }
+    ]
+  },
+  "resumption": {
+    "scenarios": 60,
+    "sellers": 12,
+    "memory_on": {
+      "resumed_pct": 100.0,
+      "calls_with_a_re_ask_pct": 0.0,
+      "facts_re_asked_pct": 0.0
+    },
+    "memory_off": {
+      "resumed_pct": 3.3,
+      "calls_with_a_re_ask_pct": 20.0,
+      "facts_re_asked_pct": 10.0
+    },
+    "engine": "rules"
+  },
+  "runtime_s": 1.3
+}

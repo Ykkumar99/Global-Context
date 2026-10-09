@@ -1,0 +1,46 @@
+# Global Context — VANI memory layer configuration
+# Every value can be overridden with an environment variable of the same
+# name in UPPER_SNAKE_CASE prefixed with GCX_ (e.g. GCX_TOKEN_BUDGET=500).
+
+data_dir: data/demo          # folder with gc_*.csv seller files (+ buyer getContext CSV)
+db_path: .gcx/context.db     # SQLite store (events, sections, docs, freshness log)
+out_dir: outputs             # where seller_md/ and buyer_md/ files are written
+
+# ---- Lookback window (tiered) -------------------------------------------
+# Tier 1  detail_days      : individual conversations, open threads
+# Tier 2  pulse_windows    : counts / rates (30d and 90d)
+# Tier 3  lifetime          : profile, KYC, categories, past objections
+lookback:
+  detail_days: 14
+  thread_days: 21            # an unanswered question stays "open" this long
+  pulse_windows: [30, 90]
+  max_items_per_section: 4
+
+token_budget: 450            # hard cap for the rendered .md (approx tokens)
+
+# Clock: the dataset ends on 2 Oct 2026. "data" makes "now" = end of data +
+# real time elapsed since the server started, so live demo events land
+# "just now" on top of real history. Use "wall" in production.
+clock: data
+as_of: null                  # optional fixed ISO timestamp, e.g. 2026-10-02T23:59:00
+
+# ---- Models ---------------------------------------------------------------
+sarvam:
+  base_url: https://api.sarvam.ai
+  chat_model: sarvam-105b
+  tts_model: bulbul:v3
+  tts_speaker: priya          # female voice for "Payal"; try: ritu, neha, kavya
+  tts_language: hi-IN
+  tts_pace: 1.05
+  stt_model: saaras:v4
+  stt_mode: codemix           # Hinglish-friendly output
+  timeout_sec: 20
+  llm_rpm: 35                 # local request budget per minute, a little under the Starter plan limits
+  tts_rpm: 27                 # (sarvam-105b 40/min, bulbul:v3 30/min) — raise on Pro/Business
+  stt_rpm: 55
+
+# Optional fallback LLM (any OpenAI-compatible endpoint). Used only when the
+# Sarvam key is missing or a Sarvam call fails.
+fallback_llm:
+  base_url: null
+  model: null

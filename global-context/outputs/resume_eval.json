@@ -1,0 +1,151 @@
+{
+ "summary": {
+  "scenarios": 60,
+  "sellers": 12,
+  "memory_on": {
+   "resumed_pct": 100.0,
+   "calls_with_a_re_ask_pct": 0.0,
+   "facts_re_asked_pct": 0.0
+  },
+  "memory_off": {
+   "resumed_pct": 3.3,
+   "calls_with_a_re_ask_pct": 20.0,
+   "facts_re_asked_pct": 10.0
+  },
+  "engine": "rules"
+ },
+ "examples": [
+  {
+   "glid": 29265692,
+   "scenario": "Mujhe 200 kg Industrial Motors chahiye Pune delivery, rate kya hai?",
+   "arm": "memory_on",
+   "facts": [
+    "product",
+    "quantity",
+    "city",
+    "question"
+   ],
+   "re_asked": [],
+   "resumed": true,
+   "turns": "BOT: Namaste, kya meri baat Special Technique se ho rahi hai? Main IndiaMART se Payal bol rahi hoon. Aapne abhi thodi der pehle WhatsApp par poochha tha — “Mujhe 200 kg Industrial Motors chahiye Pune delivery, rate…” — usi ke baare mein baat karne ke liye call kiya hai. Do minute milenge?\nUSER: Haan ji, boliye\nBOT: Ji, aapne message mein “Mujhe 200 kg Industrial Motors chahiye Pune delivery, rate k” poochha tha — iske exact details hamare executive denge. Kya main unke saath 15 minute ki call fix kar doon?",
+   "engine": "rules"
+  },
+  {
+   "glid": 29265692,
+   "scenario": "Mujhe 200 kg Industrial Motors chahiye Pune delivery, rate kya hai?",
+   "arm": "memory_off",
+   "facts": [
+    "product",
+    "quantity",
+    "city",
+    "question"
+   ],
+   "re_asked": [],
+   "resumed": false,
+   "turns": "BOT: Hello, kya meri baat Special Technique se ho rahi hai? Main IndiaMART se Payal bol rahi hoon. Main dekh rahi hoon ki aap IndiaMART ki paid services explore kar rahe the. Is baare mein hamare sales executive aapke saath ek chhoti si meeting karna chahte hain — kal aap kis time 15–20 minute nikal sakte hain?\nUSER: Haan ji, boliye\nBOT: Badhiya! Hamare sales executive aapko 15 minute mein poori jaankari denge — kal kis time theek rahega?",
+   "engine": "rules"
+  },
+  {
+   "glid": 29265692,
+   "scenario": "Premium plan ka charges kitna hai? Buy leads kitni milengi?",
+   "arm": "memory_on",
+   "facts": [
+    "question"
+   ],
+   "re_asked": [],
+   "resumed": true,
+   "turns": "BOT: Namaste, kya meri baat Special Technique se ho rahi hai? Main IndiaMART se Payal bol rahi hoon. Aapne abhi thodi der pehle WhatsApp par poochha tha — “Premium plan ka charges kitna hai? Buy leads kitni milengi?” — usi ke baare mein baat karne ke liye call kiya hai. Do minute milenge?\nUSER: Haan ji, boliye\nBOT: Ji, aapne message mein “Premium plan ka charges kitna hai? Buy leads kitni milengi?” poochha tha — iske exact details hamare executive denge. Kya main unke saath 15 minute ki call fix kar doon?",
+   "engine": "rules"
+  },
+  {
+   "glid": 29265692,
+   "scenario": "Premium plan ka charges kitna hai? Buy leads kitni milengi?",
+   "arm": "memory_off",
+   "facts": [
+    "question"
+   ],
+   "re_asked": [],
+   "resumed": false,
+   "turns": "BOT: Hello, kya meri baat Special Technique se ho rahi hai? Main IndiaMART se Payal bol rahi hoon. Main dekh rahi hoon ki aap IndiaMART ki paid services explore kar rahe the. Is baare mein hamare sales executive aapke saath ek chhoti si meeting karna chahte hain — kal aap kis time 15–20 minute nikal sakte hain?\nUSER: Haan ji, boliye\nBOT: Badhiya! Hamare sales executive aapko 15 minute mein poori jaankari denge — kal kis time theek rahega?",
+   "engine": "rules"
+  },
+  {
+   "glid": 29265692,
+   "scenario": "Kal shaam 5 baje ke baad call karna, abhi busy hoon",
+   "arm": "memory_on",
+   "facts": [
+    "time"
+   ],
+   "re_asked": [],
+   "resumed": true,
+   "turns": "BOT: Namaste, kya meri baat Special Technique se ho rahi hai? Main IndiaMART se Payal bol rahi hoon. Aapne WhatsApp par kal shaam 5 baje ke baad call karne ko kaha tha, isliye abhi call kiya hai — kya abhi baat karna theek rahega?\nUSER: Haan ji, boliye\nBOT: Dhanyavaad ji. Aapki IndiaMART profile aur enquiries ke liye hamare executive ek chhoti si call karna chahte hain — kya main unki call bhi isi time rakh doon?",
+   "engine": "rules"
+  },
+  {
+   "glid": 29265692,
+   "scenario": "Kal shaam 5 baje ke baad call karna, abhi busy hoon",
+   "arm": "memory_off",
+   "facts": [
+    "time"
+   ],
+   "re_asked": [
+    "time"
+   ],
+   "resumed": false,
+   "turns": "BOT: Hello, kya meri baat Special Technique se ho rahi hai? Main IndiaMART se Payal bol rahi hoon. Main dekh rahi hoon ki aap IndiaMART ki paid services explore kar rahe the. Is baare mein hamare sales executive aapke saath ek chhoti si meeting karna chahte hain — kal aap kis time 15–20 minute nikal sakte hain?\nUSER: Haan ji, boliye\nBOT: Badhiya! Hamare sales executive aapko 15 minute mein poori jaankari denge — kal kis time theek rahega?",
+   "engine": "rules"
+  },
+  {
+   "glid": 29265692,
+   "scenario": "Mujhe Pune ke buyers chahiye, enquiries kam aa rahi hain",
+   "arm": "memory_on",
+   "facts": [
+    "city",
+    "question"
+   ],
+   "re_asked": [],
+   "resumed": true,
+   "turns": "BOT: Namaste, kya meri baat Special Technique se ho rahi hai? Main IndiaMART se Payal bol rahi hoon. Aapne abhi thodi der pehle WhatsApp par poochha tha — “Mujhe Pune ke buyers chahiye, enquiries kam aa rahi hain” — usi ke baare mein baat karne ke liye call kiya hai. Do minute milenge?\nUSER: Haan ji, boliye\nBOT: Ji, aapne message mein “Mujhe Pune ke buyers chahiye, enquiries kam aa rahi hain” poochha tha — iske exact details hamare executive denge. Kya main unke saath 15 minute ki call fix kar doon?",
+   "engine": "rules"
+  },
+  {
+   "glid": 29265692,
+   "scenario": "Mujhe Pune ke buyers chahiye, enquiries kam aa rahi hain",
+   "arm": "memory_off",
+   "facts": [
+    "city",
+    "question"
+   ],
+   "re_asked": [],
+   "resumed": false,
+   "turns": "BOT: Hello, kya meri baat Special Technique se ho rahi hai? Main IndiaMART se Payal bol rahi hoon. Main dekh rahi hoon ki aap IndiaMART ki paid services explore kar rahe the. Is baare mein hamare sales executive aapke saath ek chhoti si meeting karna chahte hain — kal aap kis time 15–20 minute nikal sakte hain?\nUSER: Haan ji, boliye\nBOT: Badhiya! Hamare sales executive aapko 15 minute mein poori jaankari denge — kal kis time theek rahega?",
+   "engine": "rules"
+  },
+  {
+   "glid": 29265692,
+   "scenario": "Mera catalog update karna hai, Industrial Motors add karna hai",
+   "arm": "memory_on",
+   "facts": [
+    "product",
+    "question"
+   ],
+   "re_asked": [],
+   "resumed": true,
+   "turns": "BOT: Namaste, kya meri baat Special Technique se ho rahi hai? Main IndiaMART se Payal bol rahi hoon. Aapne abhi thodi der pehle WhatsApp par poochha tha — “Mujhe Pune ke buyers chahiye, enquiries kam aa rahi hain” — usi ke baare mein baat karne ke liye call kiya hai. Do minute milenge?\nUSER: Haan ji, boliye\nBOT: Ji, aapne message mein “Mujhe Pune ke buyers chahiye, enquiries kam aa rahi hain” poochha tha — iske exact details hamare executive denge. Kya main unke saath 15 minute ki call fix kar doon?",
+   "engine": "rules"
+  },
+  {
+   "glid": 29265692,
+   "scenario": "Mera catalog update karna hai, Industrial Motors add karna hai",
+   "arm": "memory_off",
+   "facts": [
+    "product",
+    "question"
+   ],
+   "re_asked": [],
+   "resumed": false,
+   "turns": "BOT: Hello, kya meri baat Special Technique se ho rahi hai? Main IndiaMART se Payal bol rahi hoon. Main dekh rahi hoon ki aap IndiaMART ki paid services explore kar rahe the. Is baare mein hamare sales executive aapke saath ek chhoti si meeting karna chahte hain — kal aap kis time 15–20 minute nikal sakte hain?\nUSER: Haan ji, boliye\nBOT: Badhiya! Hamare sales executive aapko 15 minute mein poori jaankari denge — kal kis time theek rahega?",
+   "engine": "rules"
+  }
+ ]
+}

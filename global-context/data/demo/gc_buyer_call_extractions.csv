@@ -1,0 +1,46 @@
+file_id,glid,seller_role_on_call,call_date,file_duration_sec,is_b2b,file_intent,languages,products_discussed,categories,prices_quoted,specs_discussed,stock_status
+1227140,682581,BUYER,2026-06-02 10:10:43.665,45,True,requirement,"['Hindi','English']",Power Relay,Power Relays,,Product Category: Relays,
+4782368,95568576,SELLER,2026-09-10 09:42:10.802,87,False,requirement,"['Hindi','English']",SanDisk 256GB Pen Drive,SanDisk Pen Drive,,Brand: SanDisk; Material: Plastic; USB Version: 2.0; Capacity: 256 GB,out of stock
+4783150,95568576,SELLER,2026-09-10 09:54:02.243,35,True,requirement,"['Hindi','English']",Product (Not named),Pen Drive,,,out of stock
+3961186,114584804,BUYER,2026-08-19 06:12:57.256,20,True,requirement,"['Gujarati','Hindi']",Cooking Mat,Silicone Mat,,,
+3962726,114584804,BUYER,2026-08-19 06:30:22.997,28,True,requirement,"['Gujarati','Hindi']",Mats,Door Mats,,,in stock
+3972883,114584804,BUYER,2026-08-19 08:34:12.095,28,True,requirement,"['Gujarati','English']",Kitchen Timer [Black Kitchen Timer],Kitchen Timer,,Color: Black,out of stock
+3972987,114584804,BUYER,2026-08-19 08:35:38.079,23,False,requirement,"['Gujarati','English']",Black Kitchen Timer,Kitchen Timer,,Color: Black,not sold
+3973755,114584804,BUYER,2026-08-19 08:45:13.432,18,False,requirement,"['Gujarati','English']",White Alarm Clock; Kitchen Timer,Alarm Clocks; Kitchen Timer,,Color: White,not sold
+3559006,95568576,SELLER,2026-08-08 06:35:40.159,108,True,requirement,"['Hindi','English']",Sandisk 8GB 2.0 Cruzer Blade Pen Drive,SanDisk Pen Drive,210 / piece,Brand: Sandisk; Version: 2.0; Capacity: 8 GB; Model: Cruzer Blade,in stock
+3559214,95568576,SELLER,2026-08-08 06:38:23.336,127,True,requirement,"['Hindi','English']",General Products (SS Enterprises),General Insurance,,,
+4017069,243689317,BUYER,2026-08-20 08:14:17.392,57,True,requirement,"['Hindi','English']",Toilet Brush,Toilet Cleaning Brush,,,
+4017148,243689317,BUYER,2026-08-20 08:15:32.738,14,False,requirement,"['Hindi','English']",Toilet Brush,Toilet Brushes,,,out of stock
+4225256,96255123,BUYER,2026-08-25 11:42:40.384,179,True,requirement,"['Hindi','English']",Block Print Cushion Covers; Table Runners (Block Print),Block Print Cushion Cover; Block Printed Bed Sheet,,Print Type: Block Print,in stock
+1740825,90387690,BUYER,2026-06-20 09:21:12.977,118,True,requirement,"['Hindi','English']",BOPP Film,BOPP Film,,Thickness: 23 micron; Width: 210 mm; Width: 155 mm; Type: Plain; Width: 170 mm,in stock
+965335,39067747,BUYER,2026-05-16 08:52:16.058,97,True,requirement,"['Hindi','English']",Eyelet Punching Machine (4 mm); Eyelet Punching Machine (10 mm); Eyelet Punching Machine (5.5 mm),Eyelet Punch Machine,,Eyelet Number: 1300; Eyelet Size: 4 mm; Eyelet Size: 10 mm; Required Hole Size: 10.5 mm; Eyelet Size: 5.5 mm,in stock
+5525523,29265692,BUYER,2026-10-01 09:26:45.073,330,True,requirement,"['Bengali','English']",SS Graphite Gasket; Ceramic Insulation Fabric (Non-Asbestos Gasket),Graphite Gasket; Non Asbestos Gaskets,,Working Temperature: 250 degree; Type: SS Graphite; Width: 1 meter; Length: 450 mm; Shape: Rectangular; Thickness: 9 mm; Width: 300 mm,in stock; not sold
+2027433,271092163,BUYER,2026-06-29 05:33:53.435,152,False,requirement,"['Hindi','English']",HP 2590 (Handheld Printer Cartridge),HP Ink Cartridge,4200 / piece,Color: Black; Compatibility: Handheld Printer; Model Number: 2590; Brand: HP,in stock
+4559460,83816210,BUYER,2026-09-04 06:31:31.404,73,True,requirement,"['Hindi','English']",PU Foam,PU Foam,,Density: 32 D; Brand: Insopack,in stock
+1336001,78653648,BUYER,2026-06-09 07:19:58.044,99,True,requirement,"['Hindi','English']",Fiberglass Wire (Glass Fiber Cable),Fibreglass Cables,,Insulation: Glass Fiber; Application: Heating,in stock
+461510,11574612,BUYER,2026-04-13 11:56:20.126,130,False,requirement,"['Hindi','English']",Water Cooler (60 Litre); Water Cooler (40 Litre); Water Cooler (20 Litre),Stainless Steel Water Cooler,24000; 28000; 32000,Body Warranty: 5 Year; Body Material: Stainless Steel; Warranty: 1 Year; Capacity: 20 Litre; Capacity: 60 Litre; Capacity: 40 Litre,in stock
+4809792,83816210,BUYER,2026-09-11 06:51:55.267,78,True,requirement,"['Hindi','English']",Restaurant Chair,Restaurant Chairs,2300 / piece,Capacity: One Seater; Fabric: Velvet; Fabric: Rexine,in stock
+4810160,83816210,BUYER,2026-09-11 06:56:44.404,115,True,requirement,"['Hindi','English']",Chair,Chair,,,
+1218216,94579284,BUYER,2026-06-02 04:56:46.764,88,True,requirement,"['Gujarati','English']",Bentonite Powder,Bentonite Powder,6 / kg,Application: Biomass Pellets binding,in stock
+4620729,131750605,BUYER,2026-09-06 05:48:30.521,91,True,requirement,"['Hindi','English']",TMT Bar; Gomta TMT Bar,TMT Steel Bars,,,in stock
+4637145,131750605,BUYER,2026-09-07 04:44:07.802,60,True,requirement,"['Hindi','English']",TMT Bars (Rungta brand),Rungta TMT Bar,,Brand: Rungta,
+3857156,94579284,BUYER,2026-08-16 11:50:11.487,31,True,requirement,['Gujarati'],Pellet Burner; Electric Burner,Die Casting,,Power Source: Electric; Fuel Type: Pellets (Firewood derived),in stock; not sold
+4736540,131750605,BUYER,2026-09-09 08:34:45.228,80,True,requirement,"['Hindi','English']",Rungta TMT Bar,Rungta TMT Bar,,Size: 10 mm; Size: 12 mm,in stock
+2326012,94579284,BUYER,2026-07-07 05:10:49.250,37,True,requirement,"['Gujarati','English']",Urea Formaldehyde (for Biomass Pellets),Urea Formaldehyde Resin,,Application: Biomass Pellets (Lakkada Vair/Wood Waste pellets or balls),
+4875982,94579284,BUYER,2026-09-13 06:38:39.282,201,True,requirement,['Gujarati'],6mm Pine Wood Pellets,Biomass Wood Pellet,14 / kg,Size: 6 mm; Material: Pine Wood,in stock
+4089628,94579284,BUYER,2026-08-22 05:05:35.252,167,True,requirement,"['Gujarati','English']",Biomass Pellets,Roasted Food,14 / kg,Color: White/Black Mix (75% White); Material: Pine Wood,in stock
+5428050,94579284,BUYER,2026-09-29 06:15:06.913,40,True,requirement,['Gujarati'],Biomass Pellet Burner,Metal Ingots,,Fuel Type: Biomass Pellets,not sold
+5098453,131750605,BUYER,2026-09-19 12:30:29.134,136,True,requirement,['Hindi'],E-Rickshaw Loader,E-Rickshaw Loader,160000 / piece,Suspension / Kamani: Double Kamani; Battery Type: Lithium; Motor Controller: 1500 W; Loading Capacity: 10 quintal,in stock
+5120792,131750605,BUYER,2026-09-20 16:26:05.646,62,False,requirement,"['Hindi','English']",Kamdhenu TMT Bars,Kamdhenu TMT Bars,,Brand: Kamdhenu,in stock
+5120803,131750605,BUYER,2026-09-20 16:27:33.624,81,True,requirement,"['Hindi','English']",TMT Bars,TMT Bars,62 / kg,,in stock
+2080725,79859904,BUYER,2026-06-30 07:57:14.053,63,True,requirement,"['Hindi','English']",Platform Trolley; Single wheel material handling trolley (Wheel barrow),Trolley; Platform Trolley,,Type: Wheelbarrow; Number of Wheels: 1; Number of Wheels: 4,in stock; not sold
+1373599,41440640,BUYER,2026-06-10 07:12:03.398,26,False,requirement,"['Hindi','English']",Virgin Kraft Paper; Kraft Paper (Paper Bag),Virgin Kraft Paper; Brown Paper Bag,,,
+5172970,211860075,BUYER,2026-09-22 06:53:50.364,44,True,requirement,"['Hindi','English']",BOPP Jumbo Roll (Cello Tape),BOPP Film,,Grade: Cello Tape Grade; Form: Jumbo Roll,not sold
+1424794,41440640,BUYER,2026-06-11 10:35:10.044,37,True,requirement,"['English','Hindi']",Paper Bags; Virgin Craft Paper,Paper Bags; Virgin Kraft Paper,,Type: Virgin,not sold
+5497774,108829176,BUYER,2026-09-30 12:50:01.051,144,True,requirement,"['Hindi','English']",Amazon Courier Bags; Amazon Courier Bags (Bulk),Tamper Proof Courier Bags,170 / kg; 2 / piece,Size: 10x12 inch; Brand: Amazon,in stock
+5498114,108829176,BUYER,2026-09-30 12:57:31.278,234,True,requirement,"['Hindi','English']",Amazon Polythene (10x12),Polythene Bags,170 / kg,Size: 10x12; Thickness: 52 micron; Material: Plastic Granules; Count per kg: 120 pieces,
+5498974,108829176,BUYER,2026-09-30 13:18:47.520,97,True,requirement,"['Hindi','English']",Bopp Tape (Box Tape),BOPP Tapes,,Size: 2 inch,in stock
+4147808,211860075,BUYER,2026-08-24 04:21:21.807,50,True,requirement,"['Hindi','English']",Jumbo Roll,Jumbo Paper Rolls,,,in stock
+4148029,211860075,BUYER,2026-08-24 04:27:39.621,302,True,requirement,"['Hindi','English']",Transparent Jumbo Roll; Imported Jumbo Roll,Jumbo Tape,207 / kg; 195 / kg,Color: Transparent; Thickness: 40 micron; Type: Imported; Type: Domestic; Thickness: 38 micron,in stock
+4148065,211860075,BUYER,2026-08-24 04:28:48.435,43,True,requirement,"['Hindi','English']",Jumbo Roll,Jumbo Tape,,,in stock
+4148211,211860075,BUYER,2026-08-24 04:32:56.943,82,True,requirement,"['Hindi','English']",BOPP Jumbo Roll,BOPP Film,205 / kg,Size: 12 inch; Material: BOPP,in stock

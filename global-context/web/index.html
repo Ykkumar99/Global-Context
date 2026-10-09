@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Global Context · VANI memory</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <h1>Global Context</h1>
+    <p>VANI knows the seller before it speaks</p>
+  </div>
+  <div class="who">
+    <label for="role">Role</label>
+    <select id="role"><option value="seller">Seller</option><option value="buyer">Buyer</option></select>
+    <label for="user">User</label>
+    <select id="user"></select>
+    <input id="search" type="search" placeholder="Search GLID or name" aria-label="Search GLID or name">
+  </div>
+  <div class="status" id="status" aria-live="polite"></div>
+</header>
+
+<main class="grid">
+  <!-- WhatsApp -->
+  <section class="pane wa" aria-label="WhatsApp channel">
+    <div class="pane-head">
+      <h2 id="chatTitle">WhatsApp</h2>
+      <select id="chatChannel" class="chan" aria-label="Chat channel">
+        <option value="wa_chat">WhatsApp</option>
+        <option value="app_chat">App chat</option>
+        <option value="web_chat">Web chat</option>
+      </select>
+    </div>
+    <div class="chat" id="waLog">
+      <p class="empty">Type what the user says on WhatsApp. The memory file updates instantly — then call them on the right.</p>
+    </div>
+    <div class="suggest" id="waSuggest"></div>
+    <form class="composer" id="waForm">
+      <input id="waText" autocomplete="off" placeholder="e.g. Premium plan ka charges kitna hai?" aria-label="WhatsApp message">
+      <button type="submit">Send</button>
+    </form>
+  </section>
+
+  <!-- Memory -->
+  <section class="pane memory" aria-label="Context file">
+    <div class="pane-head">
+      <h2 id="fileName">seller.md</h2>
+      <div class="file-meta">
+        <span id="tokens"></span>
+        <span id="version"></span>
+        <span class="stamp" id="stamp" hidden></span>
+      </div>
+    </div>
+    <article class="md" id="md"></article>
+    <div class="file-foot">
+      <span><a id="rawLink" target="_blank" rel="noopener">Open raw file</a> · <a id="briefLink" target="_blank" rel="noopener">Executive call-prep brief</a> · <a href="/api/segments?format=csv">Campaign segments (CSV)</a></span>
+      <button class="ghost" id="rebuild" type="button">Rebuild from history</button>
+    </div>
+  </section>
+
+  <!-- Voice -->
+  <section class="pane voice" aria-label="Voice call channel">
+    <div class="pane-head">
+      <h2>Voice call</h2>
+      <label class="toggle">
+        <input type="checkbox" id="useCtx" checked>
+        <span>Bot memory on</span>
+      </label>
+    </div>
+    <div class="callcard" id="callCard" data-phase="idle">
+      <div class="callee">
+        <div class="avatar" id="avatar" aria-hidden="true">P</div>
+        <div>
+          <div class="callee-name" id="calleeName">—</div>
+          <div class="callee-sub"><span class="dot" aria-hidden="true"></span><span id="callState" aria-live="polite">Ready to call</span></div>
+        </div>
+      </div>
+      <div class="callee-right">
+        <span class="timer" id="callTimer"></span>
+        <div class="wave" id="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      </div>
+    </div>
+    <div class="chat" id="callLog">
+      <p class="empty">Start a call and just talk — like a phone call. Payal opens with what the memory file knows, listens while you speak, and stops the moment you interrupt. Switch memory off to hear today's cold opening.</p>
+    </div>
+    <div class="callbar">
+      <button id="callBtn" class="call" type="button">Start call</button>
+      <button id="muteBtn" class="mute" type="button" aria-pressed="false" hidden>Mute</button>
+      <button id="endBtn" class="end" type="button" hidden>End call</button>
+    </div>
+    <div class="suggest" id="saySuggest"></div>
+    <form class="composer" id="sayForm">
+      <input id="sayText" autocomplete="off" placeholder="…or type what the caller says" aria-label="Caller reply" disabled>
+      <button type="submit" disabled id="sayBtn">Say</button>
+    </form>
+  </section>
+</main>
+
+<footer class="foot">
+  <span id="metrics"></span>
+  <span id="modeNote"></span>
+</footer>
+
+<template id="tplMsg"><div class="msg"><div class="bubble"></div><div class="meta"></div></div></template>
+<script src="/static/app.js"></script>
+</body>
+</html>

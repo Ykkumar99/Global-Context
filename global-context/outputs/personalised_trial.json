@@ -1,0 +1,28 @@
+[
+  {
+    "basis": "answered VANI calls (Persona dataset, Apr\u2013Sep 2026)",
+    "personalised": {
+      "n": 452,
+      "meeting_fixed_pct": 14.16
+    },
+    "main_vani": {
+      "n": 208605,
+      "meeting_fixed_pct": 11.6
+    },
+    "relative_lift_pct": 22.1,
+    "p_value": 0.0898
+  },
+  {
+    "basis": "all dial attempts (Best-Time-to-Call dataset, Apr\u2013Sep 2026)",
+    "personalised": {
+      "n": 808,
+      "meeting_fixed_pct": 7.92
+    },
+    "main_vani": {
+      "n": 396824,
+      "meeting_fixed_pct": 6.1
+    },
+    "relative_lift_pct": 29.9,
+    "p_value": 0.0306
+  }
+]
