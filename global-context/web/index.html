@@ -4,7 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Global Context · VANI memory</title>
-<link rel="stylesheet" href="/static/style.css">
+<script>
+try {
+  const savedTheme = localStorage.getItem("gcx-theme");
+  document.documentElement.dataset.theme = savedTheme || "light";
+} catch (_) {
+  document.documentElement.dataset.theme = "light";
+}
+</script>
+<link rel="stylesheet" href="static/style.css">
+<link rel="stylesheet" href="static/vani-responsive-theme.css">
 </head>
 <body>
 <header class="bar">
@@ -20,9 +29,21 @@
     <input id="search" type="search" placeholder="Search GLID or name" aria-label="Search GLID or name">
   </div>
   <div class="status" id="status" aria-live="polite"></div>
+  <button class="theme-toggle" id="themeToggle" type="button" aria-pressed="false" title="Switch to dark mode">
+    <span class="theme-icon" aria-hidden="true"></span>
+    <span id="themeLabel">Dark mode</span>
+  </button>
 </header>
 
 <main class="grid">
+  <section class="scenario-rail" aria-label="Demo scenarios">
+    <div>
+      <h2>Demo scenarios</h2>
+      <p id="scenarioHint">Pick a story, send a message, then start a call.</p>
+    </div>
+    <div class="scenario-list" id="scenarioList"></div>
+  </section>
+
   <!-- WhatsApp -->
   <section class="pane wa" aria-label="WhatsApp channel">
     <div class="pane-head">
@@ -49,8 +70,19 @@
       <h2 id="fileName">seller.md</h2>
       <div class="file-meta">
         <span id="tokens"></span>
+        <span class="token-meter" aria-hidden="true"><i id="tokenFill"></i></span>
         <span id="version"></span>
         <span class="stamp" id="stamp" hidden></span>
+      </div>
+    </div>
+    <div class="memory-insights">
+      <div class="insight">
+        <span class="insight-label">Freshness</span>
+        <strong id="freshnessStat">Ready</strong>
+      </div>
+      <div class="insight wide">
+        <span class="insight-label">Changed</span>
+        <div class="section-chips" id="changedSections"><span class="muted">No live update yet</span></div>
       </div>
     </div>
     <article class="md" id="md"></article>
@@ -68,41 +100,64 @@
         <input type="checkbox" id="useCtx" checked>
         <span>Bot memory on</span>
       </label>
-      <label class="toggle" id="engineToggleWrap" hidden title="Real Samvaad engine: native turn-taking, barge-in and silence handling instead of this demo's own voice-activity loop">
-        <input type="checkbox" id="useSamvaad" checked>
-        <span>Real-time engine (Samvaad)</span>
-      </label>
     </div>
-    <div class="callcard" id="callCard" data-phase="idle">
-      <div class="callee">
-        <div class="avatar" id="avatar" aria-hidden="true">P</div>
-        <div>
-          <div class="callee-name" id="calleeName">—</div>
-          <div class="callee-sub"><span class="dot" aria-hidden="true"></span><span id="callState" aria-live="polite">Ready to call</span></div>
+    <div class="phone-shell">
+      <div class="phone-top" aria-hidden="true"><span></span></div>
+      <div class="callcard" id="callCard" data-phase="idle">
+        <div class="callee">
+          <div class="avatar" id="avatar" aria-hidden="true">P</div>
+          <div>
+            <div class="callee-name" id="calleeName">—</div>
+            <div class="callee-sub"><span class="dot" aria-hidden="true"></span><span id="callState" aria-live="polite">Ready to call</span></div>
+          </div>
+        </div>
+        <div class="callee-right">
+          <span class="timer" id="callTimer"></span>
+          <div class="wave" id="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
         </div>
       </div>
-      <div class="callee-right">
-        <span class="timer" id="callTimer"></span>
-        <div class="wave" id="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="voice-options">
+        <label class="toggle pill">
+          <input type="checkbox" id="useMic" checked>
+          <span>Mic input</span>
+        </label>
+        <label class="toggle pill">
+          <input type="checkbox" id="useVoiceReply" checked>
+          <span>Voice replies</span>
+        </label>
+        <span id="voiceMode">Hands-free voice chat</span>
       </div>
+      <div class="compare" aria-label="Opening comparison">
+        <div class="compare-card on">
+          <span>Memory on</span>
+          <p id="memoryOnLine">Waiting for context...</p>
+        </div>
+        <div class="compare-card off">
+          <span>Memory off</span>
+          <p id="memoryOffLine">Generic paid-services cold call.</p>
+        </div>
+      </div>
+      <div class="pipeline" aria-label="Call pipeline">
+        <span id="pipeContext">Context</span>
+        <span id="pipeStt">STT</span>
+        <span id="pipeLlm">LLM</span>
+        <span id="pipeTts">TTS</span>
+        <span id="pipeSave">Saved</span>
+      </div>
+      <div class="chat" id="callLog">
+        <p class="empty">Start a call and just talk — like a phone call. Payal opens with what the memory file knows, listens while you speak, and stops the moment you interrupt. Switch memory off to hear today's cold opening.</p>
+      </div>
+      <div class="callbar">
+        <button id="callBtn" class="call" type="button">Start voice chat</button>
+        <button id="muteBtn" class="mute" type="button" aria-pressed="false" hidden>Mute</button>
+        <button id="endBtn" class="end" type="button" hidden>End call</button>
+      </div>
+      <div class="suggest" id="saySuggest"></div>
+      <form class="composer" id="sayForm">
+        <input id="sayText" autocomplete="off" placeholder="…or type what the caller says" aria-label="Caller reply" disabled>
+        <button type="submit" disabled id="sayBtn">Say</button>
+      </form>
     </div>
-    <div class="chat" id="callLog">
-      <p class="empty">Start a call and just talk — like a phone call. Payal opens with what the memory file knows, listens while you speak, and stops the moment you interrupt. Switch memory off to hear today's cold opening.</p>
-    </div>
-    <div class="callbar">
-      <button id="callBtn" class="call" type="button">Start call</button>
-      <button id="muteBtn" class="mute" type="button" aria-pressed="false" hidden>Mute</button>
-      <button id="endBtn" class="end" type="button" hidden>End call</button>
-    </div>
-    <div class="suggest" id="saySuggest"></div>
-    <form class="composer" id="sayForm">
-      <input id="sayText" autocomplete="off" placeholder="…or type what the caller says" aria-label="Caller reply" disabled>
-      <button type="submit" disabled id="sayBtn">Say</button>
-    </form>
-    <form class="composer phone" id="phoneForm" title="Payal rings this number through Sarvam Voice Agents, with this user's memory file loaded">
-      <input id="phoneNum" type="tel" inputmode="tel" autocomplete="off" placeholder="Ring a real phone: 98xxxxxxxx" aria-label="Phone number for a real call">
-      <button type="submit" id="phoneBtn">Call phone</button>
-    </form>
   </section>
 </main>
 
@@ -112,7 +167,6 @@
 </footer>
 
 <template id="tplMsg"><div class="msg"><div class="bubble"></div><div class="meta"></div></div></template>
-<script src="/static/vendor/sarvam-conv-ai-sdk.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
