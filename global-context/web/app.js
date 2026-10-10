@@ -210,7 +210,7 @@ const VAD = { startMs: 140, bargeMs: 200, endMs: 750, preRollMs: 1000, maxMs: 15
 const PHASE_TEXT = {
   idle: "Ready to call", connecting: "Connecting…", listening: "Listening…", user: "You're speaking…",
   thinking: "Payal is thinking…", speaking: "Payal is speaking — just talk to interrupt", ended: "Call ended",
-  greeting: "Payal is greeting you — reply when she finishes",
+  greeting: "Payal is greeting you — just talk to interrupt",
 };
 const MOOD_LABEL = { frustrated: "😤 frustrated", busy: "⏱ busy", confused: "🤔 confused", positive: "🙂 positive" };
 
@@ -235,6 +235,10 @@ function setPhase(p) {
 
 function setCall(on) {
   state.inCall = on;
+  // during a call the pre-call options make way for the transcript
+  const phone = $("callCard").closest(".phone");
+  phone.classList.toggle("in-call", on);
+  if (!on) phone.classList.remove("rt");
   $("callBtn").hidden = on; $("endBtn").hidden = !on; $("muteBtn").hidden = !on;
   $("sayText").disabled = !on; $("sayBtn").disabled = !on;
   clearInterval(call.timer);
@@ -509,9 +513,49 @@ let samvaadFellBack = false; // this call already dropped from Samvaad to the DI
 let samvaadLive = false;     // the Samvaad call got past connecting, so a later "idle" means it was hung up
 /* Samvaad keeps streaming near-silent audio after Payal finishes, which keeps the SDK's own state stuck on
    "speaking" — so the call screen follows what is actually audible instead: her playback level, plus the
-   engine's user_speech_start / user_speech_end events. Her opening greeting can't be interrupted (the
-   platform drops caller audio until it ends), so it gets its own status telling the caller to wait. */
+   engine's user_speech_start / user_speech_end events. */
 const sv = { lastLoud: 0, loudSince: 0, heardBot: false, greetDone: false, opening: "", tick: null };
+/* Barge-in during the greeting. Samvaad ignores the caller until its greeting has finished streaming, and people
+   answer a call by talking straight away. So while the greeting plays we watch the mic ourselves: the moment the
+   caller starts talking her greeting is silenced, what they say is held back, and it is handed to the engine as
+   soon as the greeting window closes — she answers what they said instead of talking over them. */
+const gate = { open: false, cut: false, buf: [], voicedMs: 0, lastGreetAudio: 0, openedAt: 0, send: null, player: null };
+function pcmRms(bytes) {
+  const v = new Int16Array(bytes.slice().buffer);  // copy: the view needs an even byte offset
+  let sum = 0;
+  for (let i = 0; i < v.length; i++) sum += v[i] * v[i];
+  return v.length ? Math.sqrt(sum / v.length) / 32768 : 0;
+}
+async function gatedSend(data) {
+  if (!gate.open && !gate.buf.length) return gate.send(data);
+  if (!gate.open) { gate.buf.push(data); return; }  // backlog still draining: keep the order
+  const ms = data.byteLength / 32;  // 16 kHz mono PCM16
+  gate.voicedMs = pcmRms(data) > 0.02 ? gate.voicedMs + ms : Math.max(0, gate.voicedMs - ms / 2);
+  gate.buf.push(data);
+  if (!gate.cut && gate.voicedMs >= 200) cutGreeting(ms);
+  else if (!gate.cut && gate.buf.length > 200) gate.buf.shift();  // before they speak, keep only a short pre-roll
+  return gate.send(new Uint8Array(data.byteLength));  // the engine isn't listening yet: keep the line alive
+}
+function cutGreeting(chunkMs) {
+  gate.cut = true; sv.greetDone = true; sv.lastLoud = Date.now();
+  gate.buf = gate.buf.slice(-Math.ceil((gate.voicedMs + 500) / Math.max(chunkMs, 1)));  // their words + 0.5 s before
+  try { gate.player.interrupt(); } catch {}
+  if (call.lastBot && !call.lastBot.dataset.cut) {
+    call.lastBot.dataset.cut = "1";
+    call.lastBot.querySelector(".meta").textContent += " · interrupted";
+  }
+  setPhase("user");
+}
+async function closeGate() {  // the greeting has finished streaming: the engine listens from here on
+  gate.open = false;
+  if (!gate.cut) { gate.buf = []; return; }
+  while (gate.buf.length && state.inCall && callEngine === "samvaad") {  // catch up at ~4x real time
+    const c = gate.buf.shift();
+    await gate.send(c);
+    await new Promise((r) => setTimeout(r, Math.max(4, c.byteLength / 128)));
+  }
+}
+
 function samvaadLevel(rms, playEndsAt, durMs) {
   // called when a chunk of her audio is queued for playback; playEndsAt = wall-clock time it finishes playing
   if (rms < 0.012) return;
@@ -523,6 +567,7 @@ function samvaadLevel(rms, playEndsAt, durMs) {
   setPhase(sv.greetDone ? "speaking" : "greeting");
 }
 function samvaadTick() {
+  if (gate.open && ((gate.lastGreetAudio && Date.now() - gate.lastGreetAudio > 600) || Date.now() - gate.openedAt > 20000)) closeGate();
   if (callEngine !== "samvaad" || !state.inCall || !sv.heardBot) return;  // greeting not audible yet
   if (Date.now() - sv.lastLoud > 800 && (call.phase === "speaking" || call.phase === "greeting")) {  // sentence pauses are ~0.4 s
     if (call.phase === "greeting") sv.greetDone = true;
@@ -531,6 +576,7 @@ function samvaadTick() {
 }
 function samvaadEvent(ev) {
   if (ev.type === "server.event.user_interrupt") sv.lastLoud = Date.now();  // her queued audio was just cut
+  if (ev.type === "server.event.user_speech_start" || ev.type === "server.event.user_interrupt") sv.greetDone = true;
   if (ev.type === "server.event.user_speech_start" || ev.type === "server.event.user_interrupt") setPhase("user");
   else if (ev.type === "server.event.user_speech_end") setPhase("thinking");
 }
@@ -574,7 +620,10 @@ async function startSamvaadCall() {
       if (msg.role === "bot" && sv.opening && msg.content.trim() === sv.opening.trim()) return;  // already shown
       const who = msg.role === "bot" ? "bot" : "user";
       if (who === "bot") call.heard = true;
-      else if (call.phase === "user" || call.phase === "listening") setPhase("thinking");  // her reply is being made
+      else {
+        sv.greetDone = true;  // the caller has spoken: whatever she says next is a reply, not the greeting
+        if (call.phase === "user" || call.phase === "listening" || call.phase === "greeting") setPhase("thinking");
+      }
       state.callHist.push({ who, text: msg.content });
       call.lastBot = bubble("callLog", who, msg.content, who === "bot" ? "Payal · Samvaad" : undefined);
     },
@@ -602,6 +651,19 @@ async function startSamvaadCall() {
       if (next === "connecting" || next === "connected") setPhase("connecting");  // speaking/listening come from the audio
     },
   });
+  // route the mic through the greeting gate, and drop the rest of a greeting the caller has talked over
+  const inner = samvaadAgent.agent || samvaadAgent;
+  Object.assign(gate, { open: !!vars.opening, cut: false, buf: [], voicedMs: 0, lastGreetAudio: 0, openedAt: Date.now(),
+                        send: inner.sendAudio.bind(inner), player: speakerIf });
+  inner.sendAudio = gatedSend;
+  const play = speakerIf.output.bind(speakerIf);
+  speakerIf.output = async (audio, rate) => {
+    if (gate.open) {
+      if (pcmRms(audio) > 0.02) gate.lastGreetAudio = Date.now();
+      if (gate.cut) return;
+    }
+    return play(audio, rate);
+  };
   clearInterval(sv.tick); sv.tick = setInterval(samvaadTick, 150);
   await samvaadAgent.start();
   await samvaadAgent.waitForConnect(10);
@@ -620,6 +682,7 @@ async function startSamvaadCall() {
 
 async function endSamvaadCall() {
   clearInterval(sv.tick); sv.tick = null;
+  Object.assign(gate, { open: false, cut: false, buf: [] });
   if (!samvaadAgent) return;
   try { await samvaadAgent.stop(); } catch {}
   samvaadAgent = null;
@@ -629,6 +692,7 @@ async function endSamvaadCall() {
 async function startDiyCall() {
   speaker();  // create the output audio context inside the click (browsers need a user gesture for audio)
   callEngine = "diy";
+  $("callCard").closest(".phone").classList.remove("rt");
   $("muteBtn").hidden = false;                       // undo whatever the Samvaad branch disabled, in case
   $("sayText").disabled = false; $("sayBtn").disabled = false;   // we got here by falling back
   $("sayText").placeholder = "…or type what the caller says";
@@ -673,7 +737,7 @@ $("callBtn").addEventListener("click", async () => {
   if ($("useSamvaad").checked && $("micIn").checked && $("voiceOut").checked
       && state.samvaad && state.samvaad.configured && window.SarvamConvAI) {
     callEngine = "samvaad";
-    setCall(true); setPhase("connecting"); renderSayChips();
+    setCall(true); $("callCard").closest(".phone").classList.add("rt");  // voice-only: no typed replies setPhase("connecting"); renderSayChips();
     $("muteBtn").hidden = true; // mic muting isn't exposed by the SDK yet
     $("sayText").disabled = true; $("sayBtn").disabled = true; $("sayText").placeholder = "Real-time engine — just talk, typed replies aren't routed to it";
     bubble("callLog", "system", "Connecting to the real Samvaad engine — native turn-taking, barge-in and silence handling.");
