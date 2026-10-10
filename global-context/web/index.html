@@ -100,6 +100,10 @@ try {
         <input type="checkbox" id="useCtx" checked>
         <span>Bot memory on</span>
       </label>
+      <label class="toggle" id="engineToggleWrap" hidden title="Real Samvaad engine: native turn-taking, barge-in and silence handling instead of this demo's own voice-activity loop">
+        <input type="checkbox" id="useSamvaad" checked>
+        <span>Real-time engine (Samvaad)</span>
+      </label>
     </div>
     <div class="phone-shell">
       <div class="phone-top" aria-hidden="true"><span></span></div>
@@ -157,6 +161,10 @@ try {
         <input id="sayText" autocomplete="off" placeholder="…or type what the caller says" aria-label="Caller reply" disabled>
         <button type="submit" disabled id="sayBtn">Say</button>
       </form>
+      <form class="composer phone" id="phoneForm" title="Payal rings this number through Sarvam Voice Agents, with this user's memory file loaded">
+        <input id="phoneNum" type="tel" inputmode="tel" autocomplete="off" placeholder="Ring a real phone: 98xxxxxxxx" aria-label="Phone number for a real call">
+        <button type="submit" id="phoneBtn">Call phone</button>
+      </form>
     </div>
   </section>
 </main>
@@ -167,6 +175,7 @@ try {
 </footer>
 
 <template id="tplMsg"><div class="msg"><div class="bubble"></div><div class="meta"></div></div></template>
+<script src="/static/vendor/sarvam-conv-ai-sdk.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

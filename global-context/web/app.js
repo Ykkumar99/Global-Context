@@ -621,6 +621,19 @@ $("role").addEventListener("change", (e) => { state.role = e.target.value; loadU
 $("user").addEventListener("change", (e) => selectUser(e.target.value));
 let t; $("search").addEventListener("input", (e) => { clearTimeout(t); t = setTimeout(() => loadUsers(e.target.value.trim()), 300); });
 $("rebuild").addEventListener("click", async () => { const d = await api(`/api/context/${state.glid}?rebuild=true`); showDoc(d, true); stamp("rebuilt from history"); });
+function applyTheme(theme) {
+  const dark = theme === "dark";
+  document.documentElement.dataset.theme = theme;
+  $("themeToggle").setAttribute("aria-pressed", String(dark));
+  $("themeToggle").title = dark ? "Switch to light mode" : "Switch to dark mode";
+  $("themeLabel").textContent = dark ? "Light mode" : "Dark mode";
+}
+applyTheme(document.documentElement.dataset.theme || "light");
+$("themeToggle").addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  applyTheme(next);
+  try { localStorage.setItem("gcx-theme", next); } catch {}
+});
 $("useCtx").addEventListener("change", () => { document.querySelector(".toggle span").textContent = $("useCtx").checked ? "Bot memory on" : "Bot memory off"; });
 
 (async () => {
