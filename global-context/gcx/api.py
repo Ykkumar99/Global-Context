@@ -21,6 +21,7 @@ import base64
 import hmac
 import json
 import os
+import re
 import threading
 import time
 from collections import deque
@@ -404,11 +405,43 @@ def campaign_segments(format: str = "json"):
 
 
 # ------------------------------------------------- Sarvam Voice Agent hooks
+_SENT = re.compile(r"(?<=[.?!।])\s+")
+
+
+def _mid(s: str) -> str:
+    """'Main IndiaMART…' → 'main IndiaMART…' mid-sentence, but leave names alone ('KPR Tempo…', 'IndiaMART…')."""
+    return s[0].lower() + s[1:] if len(s) > 1 and s[0].isupper() and s[1].islower() else s
+
+
+def split_greeting(text: str, lang: str) -> tuple[str, str]:
+    """Samvaad never lets the caller interrupt the agent's greeting — caller audio is dropped until it ends — so a
+    12-second memory opener left people talking into a dead line. Split it: a short hello the caller can answer
+    (greeting), and the memory point (hook) for the agent's first normal, interruptible turn."""
+    sents = [x for x in _SENT.split(text.strip()) if x]
+    cut = next((i for i, x in enumerate(sents) if "IndiaMART" in x), -1)
+    if cut < 0 or cut == len(sents) - 1:
+        return text.strip(), ""
+    greet, hook = sents[:cut + 1], " ".join(sents[cut + 1:])
+    if lang == "hi-IN":
+        ask = next((x for x in greet if x.rstrip().endswith("?")), None)
+        if ask:  # "Namaste, kya meri baat X se ho rahi hai? Main … Payal …" → introduce first, then ask: it invites a reply
+            intro = " ".join(x for x in greet if x is not ask).rstrip(".")
+            first = re.sub(r"^(Namaste),?\s*", "", ask)
+            return f"Namaste, {_mid(intro)} — {_mid(first)}", hook
+        return " ".join(greet).rstrip(".") + " — kya abhi do minute baat ho sakti hai?", hook
+    return " ".join(greet), hook
+
+
 @app.get("/sarvam/context")
 def sarvam_context(glid: int):
     d = engine.get(glid)
     op = agent.opening(glid, True)
-    return {"glid": glid, "context_md": d["md"], "opening_line": op["text"], "language": op["lang"],
+    greeting, hook = split_greeting(op["text"], op["lang"])
+    md = d["md"]
+    if hook:  # the agent reads {context}: tell it what to raise once the caller answers the greeting
+        md += ("\n\n## Your first point — say this right after they answer your greeting (in their language)\n"
+               f"> {hook}\n")
+    return {"glid": glid, "context_md": md, "opening_line": greeting, "first_point": hook, "language": op["lang"],
             "version": d["version"]}
 
 

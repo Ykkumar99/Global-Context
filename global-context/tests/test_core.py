@@ -412,3 +412,18 @@ if __name__ == "__main__":
         if name.startswith("test_"):
             fn()
             print("ok ", name)
+
+
+def test_samvaad_greeting_is_short_and_memory_point_moves_to_first_turn():
+    """Samvaad drops caller audio during the greeting, so only a short hello goes there; the memory point is
+    handed to the agent's first (interruptible) turn."""
+    from gcx.api import split_greeting
+    g, h = split_greeting("Namaste, kya meri baat KPR Tempo se ho rahi hai? Main IndiaMART se Payal bol rahi hoon. "
+                          "Pichhli baar aapne baad mein call karne ko kaha tha — kya abhi baat ho sakti hai?", "hi-IN")
+    assert g == "Namaste, main IndiaMART se Payal bol rahi hoon — kya meri baat KPR Tempo se ho rahi hai?"
+    assert h.startswith("Pichhli baar")
+    g, h = split_greeting("Namaste Abhishek ji, main IndiaMART se Payal bol rahi hoon. Aapne PVC Pipe ke liye baat ki thi.", "hi-IN")
+    assert g.endswith("kya abhi do minute baat ho sakti hai?") and h.startswith("Aapne PVC")
+    assert split_greeting("Main IndiaMART se Payal bol rahi hoon.", "hi-IN") == ("Main IndiaMART se Payal bol rahi hoon.", "")
+    g, _ = split_greeting("Namaste, KPR Tempo se baat ho rahi hai? Main IndiaMART se Payal bol rahi hoon. Meeting hui?", "hi-IN")
+    assert g == "Namaste, main IndiaMART se Payal bol rahi hoon — KPR Tempo se baat ho rahi hai?"
