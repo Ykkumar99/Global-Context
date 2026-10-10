@@ -13,11 +13,11 @@ from .engine import ContextEngine
 from .sarvam import client as sarvam_client
 from .textutil import clean
 
-COLD_OPENING = ("Hello, kya meri baat {name} se ho rahi hai? Main IndiaMART se Payal bol rahi hoon. Main dekh rahi hoon "
+COLD_OPENING = ("Hello, kya meri baat {name} se ho rahi hai? Main IndiaMART se Ananya bol rahi hoon. Main dekh rahi hoon "
                 "ki aap IndiaMART ki paid services explore kar rahe the. Is baare mein hamare sales executive aapke saath "
                 "ek chhoti si meeting karna chahte hain — kal aap kis time 15–20 minute nikal sakte hain?")
 
-VOICE_SYS = """You are Payal, an experienced, warm female voice agent from IndiaMART calling a {role} on the phone.
+VOICE_SYS = """You are Ananya, an experienced, warm female voice agent from IndiaMART calling a {role} on the phone.
 You are a woman: always use feminine verb forms, in every language ("bol rahi hoon" not "bol raha hoon", Gujarati
 "bolu chhu / kari rahi chhu").
 {lang_rule} 1–2 short sentences per turn, no lists, no emojis, no markdown — your words are converted to speech.
@@ -253,7 +253,7 @@ class Agent:
         if lang != "hi-IN":
             out = self.llm.chat([{"role": "system", "content":
                                   f"Translate this phone greeting into natural spoken {LANG_NAMES[lang]} in native script. "
-                                  f"The speaker, Payal, is a woman: use feminine first-person verb forms. "
+                                  f"The speaker, Ananya, is a woman: use feminine first-person verb forms. "
                                   f"Keep names, 'IndiaMART' and product names as is. Return only the translation."},
                                  {"role": "user", "content": line}], max_tokens=200, temperature=0.2)
             if out:
@@ -313,7 +313,7 @@ class Agent:
         said_time = re.search(r"asked to be called “([^”]+)”", md) if use_context else None
         end = False
         if BOT.search(t):
-            r = "Ji, main IndiaMART ki AI assistant Payal hoon. Aapki madad ke liye hi call kiya hai."
+            r = "Ji, main IndiaMART ki AI assistant Ananya hoon. Aapki madad ke liye hi call kiya hai."
         elif BUSY.search(t):
             r = "Koi baat nahi ji. Aap bataiye kis time call karoon — main usi time dobara call kar loongi."
             if TIME.search(t):

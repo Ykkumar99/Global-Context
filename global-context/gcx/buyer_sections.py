@@ -261,7 +261,7 @@ def build_buyer_md_parts(glid: int, data: dict) -> tuple[dict[str, list[str]], s
 
     # ---- opening line
     first = (clean(kyc.get("first_name")) or name.split(" ")[0]).title()
-    intro = f"Namaste {first} ji, main IndiaMART se Payal bol rahi hoon."
+    intro = f"Namaste {first} ji, main IndiaMART se Ananya bol rahi hoon."
     lead_title = clean(ll.get("TITLE"), 50) if ll.get("TITLE") and "create bl title" not in ll["TITLE"].lower() else ""
     lead_dt = _dt(ll.get("DATE_R"))
     said = [e for e in wev if e["type"] == "said"

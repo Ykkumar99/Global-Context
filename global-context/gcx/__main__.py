@@ -11,7 +11,7 @@
   segments                      WhatsApp-campaign segments read from the .md files → outputs/segments.csv
   brief   GLID                  executive call-prep page from the .md → outputs/briefs/GLID.html
   resume-eval [--n 12]          WhatsApp → voice resumption benchmark, memory on vs off
-  call    GLID PHONE [--lang]   Payal rings a real phone (Sarvam Instant Outbound) with GLID's memory loaded
+  call    GLID PHONE [--lang]   Ananya rings a real phone (Sarvam Instant Outbound) with GLID's memory loaded
   say     TEXT [--lang] [--glid] speak one line both ways -> outputs/tts_ab/, to A/B the pronunciation lexicon
 """
 from __future__ import annotations

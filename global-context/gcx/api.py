@@ -425,7 +425,7 @@ def split_greeting(text: str, lang: str) -> tuple[str, str]:
     greet, hook = sents[:cut + 1], " ".join(sents[cut + 1:])
     if lang == "hi-IN":
         ask = next((x for x in greet if x.rstrip().endswith("?")), None)
-        if ask:  # "Namaste, kya meri baat X se ho rahi hai? Main … Payal …" → introduce first, then ask: it invites a reply
+        if ask:  # "Namaste, kya meri baat X se ho rahi hai? Main … Ananya …" → introduce first, then ask: it invites a reply
             intro = " ".join(x for x in greet if x is not ask).rstrip(".")
             first = re.sub(r"^(Namaste),?\s*", "", ask)
             return f"Namaste, {_mid(intro)} — {_mid(first)}", hook
@@ -477,7 +477,7 @@ def sarvam_call_ended(c: CallEnded):
     hist = []
     for ln in lines:
         s = ln if isinstance(ln, str) else f"{ln.get('role', '')}: {ln.get('content', '')}"
-        who = "bot" if s.lower().startswith(("agent", "assistant", "bot", "payal")) else "user"
+        who = "bot" if s.lower().startswith(("agent", "assistant", "bot", "ananya", "payal")) else "user"
         hist.append({"who": who, "text": s.split(":", 1)[-1].strip()})
     hist = [h for h in hist if h["text"]]
     if not any(h["who"] == "user" for h in hist):  # unanswered / empty call: nothing to remember
@@ -498,7 +498,7 @@ def samvaad_config() -> dict:
             "phone": samvaad.status()}
 
 
-# --------------------------------------- Samvaad Instant Outbound: Payal rings a real phone
+# --------------------------------------- Samvaad Instant Outbound: Ananya rings a real phone
 class PhoneCallIn(BaseModel):
     glid: int
     phone: str

@@ -169,7 +169,7 @@ class ContextEngine:
             return self.build_buyer(glid, **kw)
         return self.build_seller(glid, **kw)
 
-    COLD_OPENING = ("Namaste ji, main IndiaMART se Payal bol rahi hoon. Aap IndiaMART par kuch kharidna chahte hain "
+    COLD_OPENING = ("Namaste ji, main IndiaMART se Ananya bol rahi hoon. Aap IndiaMART par kuch kharidna chahte hain "
                     "ya apna business badhana chahte hain? Bataiye, main kaise madad kar sakti hoon?")
 
     def cold_doc(self, glid: int) -> dict:
@@ -231,11 +231,11 @@ class ContextEngine:
 
     # ------------------------------------------------------- LLM enrichment
     ENRICH_SYS = (
-        "You maintain a short context file that a Hindi/Hinglish B2B voice agent (Payal from IndiaMART) reads "
+        "You maintain a short context file that a Hindi/Hinglish B2B voice agent (Ananya from IndiaMART) reads "
         "before calling a {role}. Using ONLY the facts given, return JSON with keys: "
         "\"open_threads\": list of at most 3 short bullet strings (English, each <= 18 words, newest first, "
         "only things still needing follow-up, each starting with the channel and when), and "
-        "\"opening\": one natural Hinglish opening line in Roman script (<= 40 words) that greets, introduces Payal "
+        "\"opening\": one natural Hinglish opening line in Roman script (<= 40 words) that greets, introduces Ananya "
         "from IndiaMART and references the single most relevant recent thing so the user does not have to repeat "
         "themselves. Never invent facts, prices, phone numbers or names."
     )

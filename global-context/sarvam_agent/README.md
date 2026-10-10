@@ -35,7 +35,7 @@ Start a test call with `glid = 146010610` (KPR Tempo Services). The agent should
 WhatsApp question instead of the generic pitch.
 
 ## 5. Real phone calls (Instant Outbound)
-Payal can ring a real phone with the seller's memory already loaded — no campaign needed.
+Ananya can ring a real phone with the seller's memory already loaded — no campaign needed.
 
 1. **Phone number:** indus.sarvam.ai → Deploy → Phone Numbers. Copy the number's **connection ID** and the number
    itself (E.164) into `config.yaml → samvaad.connection_id / agent_phone_number`. Check `app_version` matches the
@@ -67,7 +67,7 @@ What happens:
 | | |
 |---|---|
 | Platform | Sarvam Samvaad (indus.sarvam.ai → Voice Agents) |
-| Agent | **Payal - Global Context** · ID `Payal---Glo-ed092fb2-9b6f` · v1 · organisation **Vishwas's Organisation** (team credits). An earlier copy `Payal---Glo-b7f05376-3920` exists in Yatharth's Organisation and is no longer used |
+| Agent | **Ananya - Global Context** · ID `Payal---Glo-ed092fb2-9b6f` · v1 · organisation **Vishwas's Organisation** (team credits). An earlier copy `Payal---Glo-b7f05376-3920` exists in Yatharth's Organisation and is no longer used |
 | Voice | Ritu - Sales Agent (Bulbul, female, Hindi), speed 1.15, starts in Hindi, switches language with the caller |
 | Input variables | `glid` (default 146010610), `context`, `opening`, `language` (fallbacks if the tool fails) |
 | Greeting | `{opening}` — the personalised line from the memory file |

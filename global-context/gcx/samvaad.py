@@ -1,7 +1,7 @@
 """Real phone calls through Sarvam Voice Agents (Samvaad) — Instant Outbound + its completion webhook.
 
     place_call(glid, phone)   POST /outbounds/v1/orgs/{org}/workspaces/{ws}/outbounds
-                              Payal dials the phone with the seller's memory file already loaded as agent variables.
+                              Ananya dials the phone with the seller's memory file already loaded as agent variables.
     handle_webhook(payload)   Sarvam POSTs the outcome after the attempt ends (connected / no_answer / busy / failed).
                               A connected call is summarised and written back to the same memory file, so WhatsApp
                               (or the next call) resumes from it.

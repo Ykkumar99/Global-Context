@@ -344,7 +344,7 @@ def test_phone_call_outbound_request_and_webhook_write_back(monkeypatch):
             "channel_info": {"channel_type": "v2v", "channel_provider": "exotel", "agent_phone_number": "+918000000000"},
             "failure_reason": None, "final_agent_variables": {"glid": str(g)},
             "webhook_config": {"url": "x", "metadata": {"glid": g}},
-            "interaction_transcript": [{"role": "agent", "en_text": "Namaste, main Payal, IndiaMART se."},
+            "interaction_transcript": [{"role": "agent", "en_text": "Namaste, main Ananya, IndiaMART se."},
                                        {"role": "user", "en_text": "Haan, kal 4 baje meeting theek hai."}]}
     assert c.post(samvaad.WEBHOOK_PATH, json=hook, headers=cf).status_code == 403          # token required
     w = c.post(samvaad.WEBHOOK_PATH + "?token=t0ken", json=hook, headers=cf).json()
@@ -393,7 +393,7 @@ def test_tts_lexicon_respells_brands_in_the_target_script():
 
 def test_tts_lexicon_transliterates_and_never_translates():
     """/transliterate returns a translation for some words — those are pinned by hand, and a regression
-    here would have Payal saying a different word (योजना 'yojana' instead of 'plan')."""
+    here would have Ananya saying a different word (योजना 'yojana' instead of 'plan')."""
     from gcx.pronounce import LEXICON, for_tts
     assert for_tts("plan", "hi-IN") == "प्लान" and for_tts("plan", "mr-IN") == "प्लान"
     for bad in ("योजना", "खाता", "खाते", "संख्या", "क्रमांक", "भुगतान", "आदेश", "सेवा", "उत्पाद", "मिंट्स"):
@@ -418,12 +418,12 @@ def test_samvaad_greeting_is_short_and_memory_point_moves_to_first_turn():
     """Samvaad drops caller audio during the greeting, so only a short hello goes there; the memory point is
     handed to the agent's first (interruptible) turn."""
     from gcx.api import split_greeting
-    g, h = split_greeting("Namaste, kya meri baat KPR Tempo se ho rahi hai? Main IndiaMART se Payal bol rahi hoon. "
+    g, h = split_greeting("Namaste, kya meri baat KPR Tempo se ho rahi hai? Main IndiaMART se Ananya bol rahi hoon. "
                           "Pichhli baar aapne baad mein call karne ko kaha tha — kya abhi baat ho sakti hai?", "hi-IN")
-    assert g == "Namaste, main IndiaMART se Payal bol rahi hoon — kya meri baat KPR Tempo se ho rahi hai?"
+    assert g == "Namaste, main IndiaMART se Ananya bol rahi hoon — kya meri baat KPR Tempo se ho rahi hai?"
     assert h.startswith("Pichhli baar")
-    g, h = split_greeting("Namaste Abhishek ji, main IndiaMART se Payal bol rahi hoon. Aapne PVC Pipe ke liye baat ki thi.", "hi-IN")
+    g, h = split_greeting("Namaste Abhishek ji, main IndiaMART se Ananya bol rahi hoon. Aapne PVC Pipe ke liye baat ki thi.", "hi-IN")
     assert g.endswith("kya abhi do minute baat ho sakti hai?") and h.startswith("Aapne PVC")
-    assert split_greeting("Main IndiaMART se Payal bol rahi hoon.", "hi-IN") == ("Main IndiaMART se Payal bol rahi hoon.", "")
-    g, _ = split_greeting("Namaste, KPR Tempo se baat ho rahi hai? Main IndiaMART se Payal bol rahi hoon. Meeting hui?", "hi-IN")
-    assert g == "Namaste, main IndiaMART se Payal bol rahi hoon — KPR Tempo se baat ho rahi hai?"
+    assert split_greeting("Main IndiaMART se Ananya bol rahi hoon.", "hi-IN") == ("Main IndiaMART se Ananya bol rahi hoon.", "")
+    g, _ = split_greeting("Namaste, KPR Tempo se baat ho rahi hai? Main IndiaMART se Ananya bol rahi hoon. Meeting hui?", "hi-IN")
+    assert g == "Namaste, main IndiaMART se Ananya bol rahi hoon — KPR Tempo se baat ho rahi hai?"

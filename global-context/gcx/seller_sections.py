@@ -409,14 +409,14 @@ BUILDERS = {
 def opening_line(c: Ctx) -> str:
     """Rule-based personalised opener (LLM can rewrite it when available)."""
     name = clean(c.p.get("company_name"))
-    intro = (f"Namaste, kya meri baat {name} se ho rahi hai? Main IndiaMART se Payal bol rahi hoon." if name
-             else "Namaste ji, main IndiaMART se Payal bol rahi hoon.")
+    intro = (f"Namaste, kya meri baat {name} se ho rahi hai? Main IndiaMART se Ananya bol rahi hoon." if name
+             else "Namaste ji, main IndiaMART se Ananya bol rahi hoon.")
     if c.flag("do_not_call_requested"):
         return (f"{intro} Aapne pehle call na karne ko kaha tha — bas confirm karna tha, "
                 f"kya main aapka number calling list se hata doon?")
     th = {t["type"]: t for t in open_threads(c)}
     if any(WRONG_NO.search(e.get("text") or "") for e in c.ch("bot_call", days=60)[:2]):
-        return (f"Namaste ji, main IndiaMART se Payal bol rahi hoon. Kya yeh {name} ka number hai? "
+        return (f"Namaste ji, main IndiaMART se Ananya bol rahi hoon. Kya yeh {name} ka number hai? "
                 f"Pichhli baar shayad galat vyakti se baat ho gayi thi, isliye confirm kar rahi hoon.")
     week = len(c.ch("bot_call", days=7))
     sorry = " Is hafte pehle bhi call kiya tha, isliye bas ek minute loongi." if week >= 2 else ""

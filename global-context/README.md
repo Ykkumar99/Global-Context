@@ -84,7 +84,7 @@ Without a key, the demo uses a rule-based dialogue policy and the browser's own 
 |---|---|
 | Opening line + Bulbul audio when "Start call" is pressed | **~35 ms**: pre-generated in the background as soon as the user is opened or their file changes |
 | Sarvam-105B reply | 0.7–1.0 s |
-| User stops speaking → Payal's voice starts | **~2.4 s median**: reply text shows at once; audio is synthesised as a short head phrase + the rest in parallel, and the head plays first |
+| User stops speaking → Ananya's voice starts | **~2.4 s median**: reply text shows at once; audio is synthesised as a short head phrase + the rest in parallel, and the head plays first |
 | Speech-to-text (Saaras v4, codemix) | 0.6–0.8 s |
 
 **Rate limits:** the Starter plan allows sarvam-105b 40 requests/min and bulbul:v3 30/min. The client keeps a local
@@ -101,10 +101,10 @@ back to the browser voice. Evaluation jobs run in batch mode (they wait for quot
    The middle pane is the live `seller.md` the bot will load.
 2. **WhatsApp pane:** send “Premium plan ka charges kitna hai?”.
    The file updates in milliseconds — changed lines glow, the stamp shows the refresh time.
-3. **Voice pane → Start call.** Payal opens with:
+3. **Voice pane → Start call.** Ananya opens with:
    *“…aapne abhi thodi der pehle WhatsApp par poochha tha — ‘Premium plan ka charges kitna hai?’ — usi ke baare mein…”*
    Untick **Bot memory on** and call again to hear today's cold script for comparison.
-4. **Just talk** — the call is hands-free like a phone call: the mic stays open, Payal answers when you pause, and
+4. **Just talk** — the call is hands-free like a phone call: the mic stays open, Ananya answers when you pause, and
    stops the moment you start speaking over her (barge-in). Say “Kal 4 baje theek hai” (or type it). Then **End call** — the outcome is
    summarised and written back; the WhatsApp thread closes, the meeting appears under *Open threads*.
 5. Back on **WhatsApp**: the next reply already knows about the call. That's a conversation resumed across two channels.
@@ -177,7 +177,7 @@ tests/          pytest suite
 | Port busy | `python -m gcx serve --port 8010` |
 | No voice in offline mode | use Chrome/Edge; Safari/Firefox lack Hindi browser voices — or add the Sarvam key |
 | “Microphone blocked” in the call | allow the mic from the lock icon next to the address bar (Windows: Settings → Privacy → Microphone). Offline mode needs Chrome's speech recognition; with a Sarvam key any browser works |
-| Payal stops by herself while speaking | her own voice from the speakers is being heard as you interrupting — use headphones (echo cancellation helps but laptop speakers can still leak) |
+| Ananya stops by herself while speaking | her own voice from the speakers is being heard as you interrupting — use headphones (echo cancellation helps but laptop speakers can still leak) |
 | Sarvam errors | the footer shows the last error; `GET /api/status` → `modes.last_error`. The demo keeps working offline |
 
 Data note: the dataset contains real business names; it stays on IndiaMART machines per the hackathon rules.

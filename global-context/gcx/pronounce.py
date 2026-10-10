@@ -6,7 +6,7 @@ unlike the engine's own guess, identical on every call.
 
 The tables were generated with Sarvam's /transliterate (spoken_form=True) and then audited twice, because
 that endpoint sometimes returns a *translation* instead of a transliteration — "plan" came back as योजना
-(yojana) and "account" as खाता (khata), which would have Payal saying a different word:
+(yojana) and "account" as खाता (khata), which would have Ananya saying a different word:
 
   1. Round-trip: every entry transliterated back to Latin and compared with the source term. That caught
      Bengali "enquiry" -> এনকাউন্টার ("Encounter") and "buyers" -> ওয়ার্স ("Worse").

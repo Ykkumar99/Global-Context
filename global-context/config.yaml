@@ -31,7 +31,7 @@ sarvam:
   tts_model: bulbul:v4-flash   # conversational voices: more natural and faster than v3
   tts_fallback_model: bulbul:v3
   tts_speaker: priya           # v3 voice, used for languages without a v4 female voice and as fallback
-  tts_voices:                  # Payal's voice per language (Hindi + English share one person)
+  tts_voices:                  # Ananya's voice per language (Hindi + English share one person)
     hi-IN: ritu_hi_customer_warm
     en-IN: ritu_hi_customer_warm
     gu-IN: pooja_gu_conversational
@@ -56,7 +56,7 @@ samvaad:
   org_id: "01a1110c-209c-7de3-844d-cbd1f15f165a"
   workspace_id: "01a1110c-20a4-7547-b624-024fbcef0dc5"
   app_id: "Payal---Glo-ed092fb2-9b6f"
-  app_version: 2               # committed agent version Instant Outbound dials (Samvaad → agent → Versions)
+  app_version: 3               # committed agent version Instant Outbound dials (Samvaad → agent → Versions)
   # Real phone calls (Instant Outbound). From indus.sarvam.ai → Deploy → Phone Numbers. Not secret.
   connection_id: ""            # GCX_SAMVAAD_CONNECTION_ID
   agent_phone_number: ""       # E.164, e.g. "+9180xxxxxxxx" — GCX_SAMVAAD_AGENT_PHONE_NUMBER

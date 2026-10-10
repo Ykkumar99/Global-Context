@@ -157,7 +157,7 @@ async function selectUser(glid) {
   state.glid = Number(glid);
   state.prevLines = []; state.waHist = []; state.callHist = [];
   $("waLog").innerHTML = `<p class="empty">Type what the user says on WhatsApp. The memory file updates instantly — then call them on the right.</p>`;
-  $("callLog").innerHTML = `<p class="empty boxed">Start a call. Payal opens with what the memory file knows — switch memory off to hear today's cold opening.</p>`;
+  $("callLog").innerHTML = `<p class="empty boxed">Start a call. Ananya opens with what the memory file knows — switch memory off to hear today's cold opening.</p>`;
   $("cmpOnText").textContent = "Waiting for context…";
   resetFacts(); setPipeline(null);
   const d = await api(`/api/context/${state.glid}`);
@@ -199,7 +199,7 @@ $("waForm").addEventListener("submit", async (e) => {
 /* ---------------- live call: hands-free, both sides talk, caller can interrupt ----------------
    The mic stays open for the whole call. A small voice-activity detector (adaptive noise floor + pre-roll)
    cuts the caller's speech into turns; each turn goes to Saaras as 16 kHz WAV. If the caller starts talking
-   while Payal is speaking or thinking, her audio stops at once and the stale reply is dropped (barge-in). */
+   while Ananya is speaking or thinking, her audio stops at once and the stale reply is dropped (barge-in). */
 const call = {
   phase: "idle", gen: 0, muted: false, stream: null, ctx: null, proc: null, src: null,
   noise: 0.008, inSpeech: false, voicedMs: 0, silentMs: 0, frames: [], pre: [], preMs: 0, sr: 48000,
@@ -209,8 +209,8 @@ const END_IDLE_MS = 3000;  // after the bot's goodbye, give the caller a few sec
 const VAD = { startMs: 140, bargeMs: 200, endMs: 750, preRollMs: 1000, maxMs: 15000, minMs: 350 };
 const PHASE_TEXT = {
   idle: "Ready to call", connecting: "Connecting…", listening: "Listening…", user: "You're speaking…",
-  thinking: "Payal is thinking…", speaking: "Payal is speaking — just talk to interrupt", ended: "Call ended",
-  greeting: "Payal is greeting you — just talk to interrupt",
+  thinking: "Ananya is thinking…", speaking: "Ananya is speaking — just talk to interrupt", ended: "Call ended",
+  greeting: "Ananya is greeting you — just talk to interrupt",
 };
 const MOOD_LABEL = { frustrated: "😤 frustrated", busy: "⏱ busy", confused: "🤔 confused", positive: "🙂 positive" };
 
@@ -252,7 +252,7 @@ function setCall(on) {
 }
 
 /* ---------- audio out ---------- */
-let outCtx = null;  // one AudioContext for Payal's voice: chunks are scheduled back to back, no gaps
+let outCtx = null;  // one AudioContext for Ananya's voice: chunks are scheduled back to back, no gaps
 function speaker() {
   if (!outCtx || outCtx.state === "closed") outCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (outCtx.state === "suspended") outCtx.resume();
@@ -370,7 +370,7 @@ async function handleReply(r, gen, heardMeta) {
   call.pace = r.pace || null;
   state.callHist.push({ who: "bot", text: r.text });
   call.heard = true;
-  call.lastBot = bubble("callLog", "bot", r.text, `Payal · ${r.engine} · ${r.llm_ms} ms${r.lang && r.lang !== "hi-IN" ? " · " + r.lang : ""}`);
+  call.lastBot = bubble("callLog", "bot", r.text, `Ananya · ${r.engine} · ${r.llm_ms} ms${r.lang && r.lang !== "hi-IN" ? " · " + r.lang : ""}`);
   await say(r.text, r.audio);
   if (r.end && gen === call.gen) scheduleAutoEnd(gen);  // let the caller add a last word before cutting the call
 }
@@ -440,7 +440,7 @@ function onFrame(d) {
   // first syllables can never inflate it (that delayed barge-in by ~2 s in testing)
   if (!call.inSpeech) call.noise = Math.min(0.03, Math.max(0.002,
     rms < call.noise ? call.noise * 0.85 + rms * 0.15 : call.noise * 0.998 + rms * 0.002));
-  // while Payal talks, demand a clearly louder voice so her own audio (speaker echo) does not interrupt her
+  // while Ananya talks, demand a clearly louder voice so her own audio (speaker echo) does not interrupt her
   const talking = call.phase === "speaking";
   const thr = talking ? Math.max(0.035, call.noise * 4) : Math.max(0.014, call.noise * 2.8);
   const voiced = rms > thr;
@@ -511,7 +511,7 @@ let samvaadAgent = null;
 let callEngine = "diy"; // "diy" | "samvaad" — which engine the active call is using
 let samvaadFellBack = false; // this call already dropped from Samvaad to the DIY loop; don't do it twice
 let samvaadLive = false;     // the Samvaad call got past connecting, so a later "idle" means it was hung up
-/* Samvaad keeps streaming near-silent audio after Payal finishes, which keeps the SDK's own state stuck on
+/* Samvaad keeps streaming near-silent audio after Ananya finishes, which keeps the SDK's own state stuck on
    "speaking" — so the call screen follows what is actually audible instead: her playback level, plus the
    engine's user_speech_start / user_speech_end events. */
 const sv = { lastLoud: 0, loudSince: 0, heardBot: false, greetDone: false, opening: "", tick: null };
@@ -625,7 +625,7 @@ async function startSamvaadCall() {
         if (call.phase === "user" || call.phase === "listening" || call.phase === "greeting") setPhase("thinking");
       }
       state.callHist.push({ who, text: msg.content });
-      call.lastBot = bubble("callLog", who, msg.content, who === "bot" ? "Payal · Samvaad" : undefined);
+      call.lastBot = bubble("callLog", who, msg.content, who === "bot" ? "Ananya · Samvaad" : undefined);
     },
     stateCallback: (next) => {
       if (next === "error") { fallBackToDiy("Samvaad engine error"); return; }
@@ -634,7 +634,7 @@ async function startSamvaadCall() {
         // the greeting is spoken from the agent config and never comes back as a transcript: show it now
         if (sv.opening) {
           state.callHist.push({ who: "bot", text: sv.opening });
-          call.lastBot = bubble("callLog", "bot", sv.opening, "Payal · Samvaad · greeting from memory");
+          call.lastBot = bubble("callLog", "bot", sv.opening, "Ananya · Samvaad · greeting from memory");
         }
         setPhase(sv.opening ? "greeting" : "listening");
         return;
@@ -704,12 +704,12 @@ async function startDiyCall() {
     bubble("callLog", "system", "Microphone blocked — allow it from the lock icon next to the address bar, or type below.");
   }
   if (!micOn) bubble("callLog", "system", "Mic input is off — type what the caller says below.");
-  bubble("callLog", "system", $("useCtx").checked ? `Payal loaded ${state.role}.md (v${$("version").textContent.replace(/^v/, "")})` : "Cold start — no memory loaded (today's VANI)");
+  bubble("callLog", "system", $("useCtx").checked ? `Ananya loaded ${state.role}.md (v${$("version").textContent.replace(/^v/, "")})` : "Cold start — no memory loaded (today's VANI)");
   try {
     const r = await api("/api/call/start", { glid: state.glid, use_context: $("useCtx").checked });
     state.lang = r.lang || "hi-IN";
     state.callHist.push({ who: "bot", text: r.text });
-    call.lastBot = bubble("callLog", "bot", r.text, `Payal · ${r.audio ? "Sarvam Bulbul" : "browser voice"}${r.prewarmed ? " · ready in " + r.ms + " ms" : ""}${state.lang !== "hi-IN" ? " · " + state.lang + " (from call history)" : ""}`);
+    call.lastBot = bubble("callLog", "bot", r.text, `Ananya · ${r.audio ? "Sarvam Bulbul" : "browser voice"}${r.prewarmed ? " · ready in " + r.ms + " ms" : ""}${state.lang !== "hi-IN" ? " · " + state.lang + " (from call history)" : ""}`);
     if (!sarvamEars && micOn) startBrowserRecognition();
     await say(r.text, r.audio);
   } catch (err) { bubble("callLog", "system", "Could not start the call: " + err.message); endCall(); }
@@ -733,7 +733,7 @@ $("callBtn").addEventListener("click", async () => {
   $("callLog").innerHTML = "";
   // same three conditions that reveal the toggle: on by default, so a missing SDK or unconfigured agent has to
   // fall through to the DIY loop rather than throw inside startSamvaadCall
-  // the real-time engine is voice-only, so it needs the mic on and Payal's voice on
+  // the real-time engine is voice-only, so it needs the mic on and Ananya's voice on
   if ($("useSamvaad").checked && $("micIn").checked && $("voiceOut").checked
       && state.samvaad && state.samvaad.configured && window.SarvamConvAI) {
     callEngine = "samvaad";
@@ -823,7 +823,7 @@ function phoneUpdate(d) {
   const key = `${d.attempt_id}:${d.status}:${d.version || ""}`;
   if (phoneSeen.has(key)) return;
   phoneSeen.add(key);
-  if (d.status === "dialing") { bubble("callLog", "system", `Payal is ringing ${d.phone} from Sarvam Voice Agents…`, `attempt ${d.attempt_id.slice(0, 8)}`); return; }
+  if (d.status === "dialing") { bubble("callLog", "system", `Ananya is ringing ${d.phone} from Sarvam Voice Agents…`, `attempt ${d.attempt_id.slice(0, 8)}`); return; }
   const dur = d.duration ? ` · ${Math.round(d.duration)} s` : "";
   bubble("callLog", "system", `Phone call ${PHONE_STATUS[d.status] || d.status}${d.failure_reason ? " — " + d.failure_reason : ""}`, `Sarvam phone call${dur}`);
   if (d.summary) bubble("callLog", "system", `Saved to memory: ${d.summary.disposition} — ${d.summary.summary}`, `file v${d.version}`);
@@ -831,7 +831,7 @@ function phoneUpdate(d) {
 function setupPhone(p) {
   const ready = p && p.ready;
   $("phoneBtn").disabled = !ready;
-  $("phoneForm").title = ready ? `Payal rings this number from ${p.agent_phone_number}${p.webhook ? "" : " (no public_url: outcome saved by the agent's on_end tool)"}`
+  $("phoneForm").title = ready ? `Ananya rings this number from ${p.agent_phone_number}${p.webhook ? "" : " (no public_url: outcome saved by the agent's on_end tool)"}`
     : "Phone calls need: " + ((p && p.missing) || []).join(", ") + " — see config.yaml → samvaad";
 }
 $("phoneForm").addEventListener("submit", async (e) => {
