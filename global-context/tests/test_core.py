@@ -199,7 +199,7 @@ def test_parallel_tts_chunks_and_wav_join():
     assert chunks[0] == "Thank you." and len(chunks) == 2 and all(c.strip() for c in chunks)
     long_head = Sarvam.speech_chunks("Ji, main exact charges toh nahi bata paungi, par aapke sales executive aapko poora "
                                      "plan detail mein samjha denge. Kal kab free hain?")
-    assert long_head[0] == "Ji, main exact charges toh nahi bata paungi," and len(long_head) == 2
+    assert len(long_head) == 2 and long_head[0].endswith("samjha denge.")  # never split mid-sentence
     assert Sarvam.speech_chunks("Ji bilkul, kal 4 baje.") == ["Ji bilkul, kal 4 baje."]  # short → one request
 
     def tone(n):
@@ -249,6 +249,16 @@ def test_reply_language_follows_the_user():
     assert detect_lang("नाही thank you", "mr-IN", current="hi-IN") == "hi-IN"
     assert detect_lang("मराठी बघितलं तुला?", "mr-IN", current="hi-IN") == "hi-IN"
     assert detect_lang("ok thank you", "en-IN", current="hi-IN") == "hi-IN"  # too short to switch
+
+
+def test_caller_can_ask_for_a_language():
+    # a caller asking in Hindi for Gujarati used to stay in Hindi
+    from gcx.agent import requested_lang
+    assert requested_lang("Gujarati mein baat karo") == "gu-IN"
+    assert requested_lang("Please speak in English") == "en-IN"
+    assert requested_lang("বাংলায় কথা বলুন") == "bn-IN"
+    assert requested_lang("Marathi mein kyun bol rahi ho?") == "back"  # a complaint, not a request
+    assert requested_lang("Mujhe plan ka rate chahiye") is None
 
 
 def test_rate_limiter_stays_under_plan_limit():
@@ -318,7 +328,7 @@ def test_phone_call_outbound_request_and_webhook_write_back(monkeypatch):
     assert sent["headers"]["X-API-Key"] == "k3y"
     b = sent["body"]
     assert b["user_config"] == {"user_phone_number": "+919876543210"}
-    assert b["app_config"]["app_version"] == 1 and b["app_config"]["connection_config"] == {
+    assert b["app_config"]["app_version"] == samvaad.settings()["app_version"] and b["app_config"]["connection_config"] == {
         "connection_id": "conn-1", "agent_phone_number": "+918000000000"}
     av = b["app_config"]["agent_variables"]
     assert av["glid"] == str(g) and av["context"].startswith("---") and av["opening"]
@@ -367,7 +377,7 @@ def test_phone_call_reports_missing_config(monkeypatch):
     monkeypatch.setenv("GCX_SAMVAAD_CONNECTION_ID", "")
     monkeypatch.setenv("GCX_SAMVAAD_AGENT_PHONE_NUMBER", "")
     r = TestClient(api.app).post("/api/phone-call", json={"glid": 146010610, "phone": "9876543210"})
-    assert r.status_code == 503 and "connection_id" in r.json()["detail"]
+    assert r.status_code == 503 and "connection_id" in r.json()["detail"], r.text
 
 
 def test_tts_lexicon_respells_brands_in_the_target_script():

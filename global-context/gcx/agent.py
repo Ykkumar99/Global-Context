@@ -51,6 +51,8 @@ Rules:
   call instead of over-explaining.
 - If the caller keeps deflecting instead of answering a question (teasing, stalling, repeating the same test):
   after one light redirect, stop re-asking — propose a concrete day/time yourself and move the call toward closing.
+- If the caller says they did not hear you ("kya bola?", "sunai nahi diya"), repeat your last point in fewer words —
+  never ask "ab sunai de raha hai?" and never comment on the line.
 - Privacy: never reveal another buyer's or seller's name, phone number, messages or quoted prices. Refer to them
   only generically ("ek buyer ne Mumbai se enquiry bheji hai").
 - If the CONTEXT says cold_start / no history, do not pretend to know them: introduce yourself and ask one open question.
@@ -143,6 +145,32 @@ _MR_WORDS = set("आहे आहेत नाही नको काय कस�
                 "झाला बघितलं सांगा करतो करते करायचं आम्ही वाजता वाजताची संध्याकाळी उद्या आहात".split())
 _HI_WORDS = set("है हैं नहीं क्या मुझे मेरा मेरी आप आपका आपको और लेकिन हाँ हां कल बजे करो ठीक चाहिए था थी रहा रही "
                 "हूँ हूं बोलिए बताइए दो दीजिए".split())
+
+
+_LANG_ASKED = [  # how callers name a language, in Roman, Devanagari and the language's own script
+    ("gu-IN", r"gujarati|gujrati|गुजराती|ગુજરાતી"), ("mr-IN", r"marathi|मराठी"), ("ta-IN", r"tamil|तमिल|தமிழ்"),
+    ("te-IN", r"telugu|तेलुगु|తెలుగు"), ("bn-IN", r"bengali|bangla|बंगाली|बांग्ला|বাংলা"),
+    ("kn-IN", r"kannada|कन्नड़|कन्नड|ಕನ್ನಡ"), ("ml-IN", r"malayalam|मलयालम|മലയാളം"),
+    ("pa-IN", r"punjabi|पंजाबी|ਪੰਜਾਬੀ"), ("od-IN", r"odia|oriya|ओड़िया|ओडिया|ଓଡ଼ିଆ"),
+    ("en-IN", r"english|इंग्लिश|अंग्रेज़ी|अंग्रेजी"), ("hi-IN", r"hindi|हिंदी|हिन्दी"),
+]
+_ASK_VERB = re.compile(r"\b(baat|bolo|boliye|bolna|bol|karo|kijiye|kar|samjhao|batao|speak|talk|reply|switch|continue|"
+                       r"bolun|kotha|pesu|pesungal|matladandi|matladu|maatanadi|vaat|bola)\b"
+                       r"|बात|बोलो|बोलिए|बोल|करो|कीजिए|समझाओ|बताओ|বলুন|কথা|பேசுங்கள்|మాట్లాడండి|ಮಾತನಾಡಿ|વાત", re.I)
+_COMPLAINT = re.compile(r"\b(kyun|kyon|kyu|why|mat|don'?t|stop)\b|क्यों|क्यूं|मत", re.I)
+
+
+def requested_lang(text: str) -> str | None:
+    """A caller who *asks* for a language ("Gujarati mein baat karo", "speak in Tamil") is switched to it even
+    though they asked in Hindi — before this, the reply stayed Hindi. "Marathi mein kyun bol rahi ho?" is a
+    complaint, not a request -> "back" (reset to the language they are actually speaking)."""
+    for code, names in _LANG_ASKED:
+        if re.search(names, text or "", re.I):
+            if _COMPLAINT.search(text):
+                return "back"
+            if _ASK_VERB.search(text):
+                return code
+    return None
 
 
 def detect_lang(text: str, hint: str | None = None, current: str | None = None) -> str:
@@ -254,16 +282,22 @@ class Agent:
         for h in history[-12:]:
             msgs.append({"role": "assistant" if h["who"] == "bot" else "user", "content": h["text"]})
         # the system prompt alone loses to a Hinglish history, so restate the language on the latest turn
-        note = {"en-IN": "\n\n[Reply in English only.]", "hi-IN": ""}.get(
+        note = {"en-IN": "\n\n[Reply in English only.]",
+                "hi-IN": "\n\n[Reply in Hinglish only - Roman-script Hindi.]"}.get(
             lang, f"\n\n[Reply in {LANG_NAMES.get(lang, lang)} only, native script.]") if channel == "voice" else ""
         msgs.append({"role": "user", "content": user_text + note})
         out = self.llm.chat(msgs, max_tokens=180, temperature=0.4)
-        if out and channel == "voice" and lang != "hi-IN" and detect_lang(out) != lang:
-            # the model copied the Hinglish of earlier turns — rewrite once in the caller's language
-            target = "simple, natural Indian English (no Hindi words)" if lang == "en-IN" else \
-                f"{LANG_NAMES.get(lang, lang)} in native script"
+        # the model tends to copy the language of earlier turns (a Gujarati stretch, then "ab Hindi mein boliye"
+        # still came back in Gujarati); Hinglish and Devanagari Hindi both count as Hindi
+        got = detect_lang(out or "", current=lang)
+        wrong = (got not in ("hi-IN", "en-IN")) if lang == "hi-IN" else (got != lang)
+        if out and channel == "voice" and wrong:
+            target = {"en-IN": "simple, natural Indian English (no Hindi words)",
+                      "hi-IN": "natural Hinglish in Roman script (Hindi grammar, everyday English words)"}.get(
+                lang, f"{LANG_NAMES.get(lang, lang)} in native script")
             fixed = self.llm.chat([{"role": "system", "content": f"Rewrite this phone reply in {target}. Keep the "
-                                    "meaning, names, days and times exactly. Return only the rewritten reply."},
+                                    "meaning, names, days and times exactly. The speaker is a woman. Return only "
+                                    "the rewritten reply."},
                                    {"role": "user", "content": out}], max_tokens=180, temperature=0.2)
             out = fixed or out
         if out:

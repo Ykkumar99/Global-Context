@@ -141,7 +141,9 @@ class Store:
         return out
 
     def max_event_ts(self) -> datetime | None:
-        r = self.conn().execute("SELECT MAX(ts) FROM events WHERE live=0").fetchone()
+        # include live events: they're stamped with this clock, so after a restart the clock must resume past
+        # them — otherwise calls made in an earlier session sit "in the future" and drop out of the next rebuild
+        r = self.conn().execute("SELECT MAX(ts) FROM events").fetchone()
         return parse_ts(r[0]) if r and r[0] else None
 
     def event_count(self) -> int:

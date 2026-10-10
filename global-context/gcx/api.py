@@ -35,7 +35,7 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from . import seller_sections as S
-from .agent import MOOD_PACE, Agent, detect_lang, detect_mood
+from .agent import MOOD_PACE, Agent, detect_lang, detect_mood, requested_lang
 from .config import ROOT, get_config
 from .engine import ContextEngine
 from . import samvaad
@@ -305,6 +305,13 @@ class CallIn(BaseModel):
     history: list[dict] = []
     text: str | None = None
     tts: bool = True
+    engine: str | None = None    # "samvaad" when the browser call ran on Sarvam's real-time engine
+
+
+# glid -> when the browser saved a Samvaad call itself; the agent's own save_call tool (via the tunnel, if it's up)
+# reports the same call a moment later and must not write it twice
+_SAMVAAD_SAVED: dict[int, float] = {}
+SAMVAAD_DEDUPE_S = 180
 
 
 @app.post("/api/call/start")
@@ -322,8 +329,13 @@ def call_turn(c: CallIn):
     if not c.text:
         raise HTTPException(400, "text required (or use /api/call/turn-audio)")
     t0 = time.time()
-    # follow the caller's language turn by turn, but never flip on one short or ambiguous turn
-    lang = detect_lang(c.text, hint=c.stt_lang or c.lang, current=c.lang)
+    # follow the caller's language turn by turn, but never flip on one short or ambiguous turn; an explicit
+    # request ("Gujarati mein baat karo") wins, a complaint ("Marathi mein kyun?") resets to what they speak
+    asked = requested_lang(c.text)
+    if asked == "back":
+        lang = detect_lang(c.text, hint=c.stt_lang, current="hi-IN")
+    else:
+        lang = asked or detect_lang(c.text, hint=c.stt_lang or c.lang, current=c.lang)
     mood = detect_mood(c.text)               # and their mood: tone, length and speaking pace adapt
     r = agent.reply(c.glid, c.history, c.text, use_context=c.use_context, lang=lang, mood=mood)
     t1 = time.time()
@@ -355,7 +367,10 @@ def call_end(c: CallIn):
     _need(c.glid)
     if not c.history:
         return {"skipped": True}
-    out = agent.end_call(c.glid, c.history)
+    who = "Sarvam voice agent" if c.engine == "samvaad" else None
+    out = agent.end_call(c.glid, c.history, who) if who else agent.end_call(c.glid, c.history)
+    if who:
+        _SAMVAAD_SAVED[c.glid] = time.time()
     d = out["doc"]
     return {"summary": out["summary"], "freshness_ms": d["freshness_ms"], "version": d["version"]}
 
@@ -409,6 +424,8 @@ def sarvam_call_ended(c: CallEnded):
     _need(c.glid)
     if samvaad.webhook_owns(engine.store, c.glid):  # a phone call we placed: its outbound webhook writes the outcome back once
         return {"skipped": True, "reason": "outbound webhook will write this call back"}
+    if time.time() - _SAMVAAD_SAVED.get(c.glid, 0) < SAMVAAD_DEDUPE_S:
+        return {"skipped": True, "reason": "browser already saved this Samvaad call"}
     if c.summary:
         d = engine.on_event(c.glid, "voice_call", c.disposition or "General (talked)", c.summary,
                             {"agent": "Sarvam voice agent", "live": 1})

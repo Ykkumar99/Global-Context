@@ -175,27 +175,19 @@ class Sarvam:
 
     # --------------------------------------------------------------- TTS
     _SENT = re.compile(r"(?<=[.?!।|])\s+")
-    _CLAUSE = re.compile(r"(?<=[,—;])\s+")
 
     @classmethod
     def speech_chunks(cls, text: str) -> list[str]:
-        """At most two chunks: a short opening phrase (first sentence, or its first clause if long) and the rest.
-        Bulbul takes ~0.8 s + 0.02 s/char, so the short head plays ~1 s after the LLM answers while the rest is
-        synthesised in parallel — and a reply costs only 2 of the 30 TTS requests/min the Starter plan allows."""
+        """At most two chunks, split only at a sentence end: a clause split ("Ji, main ... ,") breaks the speaker's
+        intonation and sounded robotic in a real test call. Short replies are one request; longer ones are first
+        sentence + rest, synthesised in parallel so the first sentence can start early (2 TTS requests/reply)."""
         text = text.strip()
-        if len(text) <= 70:
+        if len(text) <= 90:
             return [text] if text else []
         sents = [x for x in cls._SENT.split(text) if x.strip()]
+        if len(sents) < 2:
+            return [text]
         head = sents[0]
-        if len(head) > 60:  # take leading clauses until the head is >= 20 chars ("Ji," alone is too short)
-            clauses = [c for c in cls._CLAUSE.split(head) if c.strip()]
-            short = clauses[0]
-            for c in clauses[1:-1]:
-                if len(short) >= 20:
-                    break
-                short += " " + c
-            if len(short) < len(head) - 10:
-                head = short
         rest = text[len(head):].strip()
         return [head, rest] if rest else [head]
 

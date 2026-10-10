@@ -56,14 +56,14 @@ samvaad:
   org_id: "01a1110c-209c-7de3-844d-cbd1f15f165a"
   workspace_id: "01a1110c-20a4-7547-b624-024fbcef0dc5"
   app_id: "Payal---Glo-ed092fb2-9b6f"
-  app_version: 1               # committed agent version Instant Outbound dials (Samvaad → agent → Versions)
+  app_version: 2               # committed agent version Instant Outbound dials (Samvaad → agent → Versions)
   # Real phone calls (Instant Outbound). From indus.sarvam.ai → Deploy → Phone Numbers. Not secret.
   connection_id: ""            # GCX_SAMVAAD_CONNECTION_ID
   agent_phone_number: ""       # E.164, e.g. "+9180xxxxxxxx" — GCX_SAMVAAD_AGENT_PHONE_NUMBER
   # Public HTTPS base of this server (cloudflared / ngrok URL). Sarvam POSTs each call's outcome to
   # <public_url>/sarvam/outbound-webhook?token=<GCX_TUNNEL_TOKEN>. Quick-tunnel URLs change on restart:
   # set GCX_PUBLIC_URL in the shell instead of editing this file.
-  public_url: ""
+  public_url: "https://beginner-accountability-english-choices.trycloudflare.com"
 
 # Optional fallback LLM (any OpenAI-compatible endpoint). Used only when the
 # Sarvam key is missing or a Sarvam call fails.

@@ -11,6 +11,47 @@ const SAY = {
   buyer: ["Haan ji boliye", "Abhi tak sahi rate nahi mila", "Haan, suppliers bhej do"],
 };
 
+const STORIES = [
+  { title: "Asked on WhatsApp, then called", sub: "Seller · pricing question carries into the call", role: "seller", glid: 146010610, msg: "Premium plan ka charges kitna hai?" },
+  { title: "Busy seller wants a callback", sub: "Seller · the call respects the time asked for", role: "seller", glid: 79859904, msg: "Kal 4 baje ke baad call karna" },
+  { title: "Buyer needs more suppliers", sub: "Buyer · buyer.md instead of seller.md", role: "buyer", glid: 73699779, msg: "Mujhe aur suppliers chahiye" },
+  { title: "Today's cold call", sub: "Memory off · hear the difference", role: null, glid: null, msg: null, cold: true },
+];
+
+/* ---------------- theme ---------------- */
+function currentTheme() {
+  return document.documentElement.dataset.theme
+    || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+}
+function applyTheme(t, save) {
+  document.documentElement.dataset.theme = t;
+  $("themeLabel").textContent = t === "dark" ? "Light mode" : "Dark mode";
+  if (save) try { localStorage.setItem("gcx-theme", t); } catch {}
+}
+$("themeBtn").addEventListener("click", () => applyTheme(currentTheme() === "dark" ? "light" : "dark", true));
+applyTheme(currentTheme());
+
+function renderStories() {
+  const box = $("stories"); box.innerHTML = "";
+  for (const st of STORIES) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "story";
+    b.innerHTML = `<b>${esc(st.title)}</b><span>${esc(st.sub)}</span>`;
+    b.onclick = async () => {
+      box.querySelectorAll(".story").forEach((x) => x.classList.toggle("active", x === b));
+      if (state.inCall) await endCall();
+      $("useCtx").checked = !st.cold; syncMemoryToggle();
+      if (st.glid) {
+        if (state.role !== st.role) { state.role = st.role; $("role").value = st.role; }
+        await loadUsers(String(st.glid));
+      }
+      if (st.msg) { $("waText").value = st.msg; $("waText").focus(); }
+      else $("callBtn").focus();
+    };
+    box.appendChild(b);
+  }
+}
+
 /* ---------------- api ---------------- */
 async function api(path, body) {
   const opt = body instanceof FormData ? { method: "POST", body }
@@ -32,11 +73,13 @@ function renderMd(md, highlight) {
   const lines = body.split("\n");
   const prev = new Set(state.prevLines);
   const out = [];
+  let changed = 0;
   if (fm) out.push(`<div class="fm">${esc(fm)}</div>`);
   let inList = false;
   for (const raw of lines) {
     const line = raw.trimEnd();
     const chg = highlight && line && !prev.has(line) ? " chg" : "";
+    if (chg) changed++;
     if (line.startsWith("- ")) {
       if (!inList) { out.push("<ul>"); inList = true; }
       out.push(`<li class="${chg}">${inline(line.slice(2))}</li>`);
@@ -53,22 +96,41 @@ function renderMd(md, highlight) {
   $("md").innerHTML = out.join("");
   state.prevLines = lines.map((l) => l.trimEnd());
   if (highlight) setTimeout(() => document.querySelectorAll(".md .chg").forEach((e) => e.classList.add("fade")), 3500);
+  return changed;
 }
 
 function showDoc(d, highlight = false) {
-  renderMd(d.md, highlight);
+  const changed = renderMd(d.md, highlight);
+  const budget = state.tokenBudget || 450;
   $("tokens").textContent = `${d.tokens} tokens`;
-  $("version").textContent = `v${d.version}${d.llm_enriched ? " · AI-polished" : ""}`;
+  $("tokFill").style.width = `${Math.min(100, (d.tokens / budget) * 100)}%`;
+  $("tokFill").parentElement.classList.toggle("full", d.tokens > budget);
+  $("tokFill").parentElement.title = `${d.tokens} of a ${budget}-token budget`;
+  $("version").textContent = `v${d.version}${d.llm_enriched ? " · AI" : ""}`;
   $("fileName").textContent = `${d.role || state.role}.md · ${state.glid}`;
   $("rawLink").href = `/context/${state.glid}.md`;
   $("briefLink").href = `/brief/${state.glid}`;
-  if (highlight && d.freshness_ms != null) stamp(`updated in ${d.freshness_ms} ms`);
-  else if (highlight && d.llm_enriched) stamp("AI polish applied");
+  const opening = d.sections && d.sections.opening && d.sections.opening[0];
+  if (opening) $("cmpOnText").textContent = opening;
+  // the deterministic update lands first (ms); the AI polish follows seconds later — keep both visible
+  if (highlight && d.freshness_ms != null) { state.lastFresh = `updated in ${d.freshness_ms} ms`; stamp(state.lastFresh, changed); }
+  else if (highlight && d.llm_enriched) stamp(state.lastFresh ? `${state.lastFresh} · AI polished` : "AI polish applied", changed);
 }
-function stamp(text) {
-  const s = $("stamp");
-  s.hidden = false; s.textContent = text;
-  s.style.animation = "none"; void s.offsetWidth; s.style.animation = "";
+/* the Freshness / Changed cards above the file: how fast the last event landed and how much of the file moved */
+function stamp(text, changed) {
+  $("freshness").textContent = text;
+  $("changed").textContent = changed ? `${changed} line${changed > 1 ? "s" : ""} changed · ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "No line changed";
+  for (const id of ["freshness", "changed"]) {
+    const card = $(id).parentElement;
+    card.classList.remove("hot"); void card.offsetWidth; card.classList.add("hot");
+  }
+  clearTimeout(stamp.t);
+  stamp.t = setTimeout(() => document.querySelectorAll(".fact.hot").forEach((c) => c.classList.remove("hot")), 4000);
+}
+function resetFacts() {
+  state.lastFresh = null;
+  $("freshness").textContent = "Ready"; $("changed").textContent = "No live update yet";
+  document.querySelectorAll(".fact.hot").forEach((c) => c.classList.remove("hot"));
 }
 
 /* ---------------- chat bubbles ---------------- */
@@ -95,8 +157,9 @@ async function selectUser(glid) {
   state.glid = Number(glid);
   state.prevLines = []; state.waHist = []; state.callHist = [];
   $("waLog").innerHTML = `<p class="empty">Type what the user says on WhatsApp. The memory file updates instantly — then call them on the right.</p>`;
-  $("callLog").innerHTML = `<p class="empty">Start a call. Payal opens with what the memory file knows — switch memory off to hear today's cold opening.</p>`;
-  $("stamp").hidden = true;
+  $("callLog").innerHTML = `<p class="empty boxed">Start a call. Payal opens with what the memory file knows — switch memory off to hear today's cold opening.</p>`;
+  $("cmpOnText").textContent = "Waiting for context…";
+  resetFacts(); setPipeline(null);
   const d = await api(`/api/context/${state.glid}`);
   $("calleeName").textContent = d.label.name || `GLID ${state.glid}`;
   $("avatar").textContent = (d.label.name || "?").trim()[0].toUpperCase();
@@ -147,11 +210,25 @@ const VAD = { startMs: 140, bargeMs: 200, endMs: 750, preRollMs: 1000, maxMs: 15
 const PHASE_TEXT = {
   idle: "Ready to call", connecting: "Connecting…", listening: "Listening…", user: "You're speaking…",
   thinking: "Payal is thinking…", speaking: "Payal is speaking — just talk to interrupt", ended: "Call ended",
+  greeting: "Payal is greeting you — reply when she finishes",
 };
 const MOOD_LABEL = { frustrated: "😤 frustrated", busy: "⏱ busy", confused: "🤔 confused", positive: "🙂 positive" };
 
+/* Context → STT → LLM → TTS → Saved: which stage of the turn is running right now */
+const PIPE = { connecting: "context", user: "stt", thinking: "llm", speaking: "tts", greeting: "tts" };
+const PIPE_ORDER = ["context", "stt", "llm", "tts", "saved"];
+function setPipeline(active, done = []) {
+  for (const li of $("pipeline").children) {
+    li.classList.toggle("active", li.dataset.step === active);
+    li.classList.toggle("done", done.includes(li.dataset.step));
+  }
+}
 function setPhase(p) {
   call.phase = p;
+  if (p === "idle") setPipeline(null);
+  else if (p === "ended") setPipeline(null, call.saved ? PIPE_ORDER : ["context"]);
+  else if (PIPE[p]) setPipeline(PIPE[p], PIPE_ORDER.slice(0, PIPE_ORDER.indexOf(PIPE[p])));
+  else if (p === "listening") setPipeline(null, call.heard ? ["context", "stt", "llm", "tts"] : ["context"]);
   $("callCard").dataset.phase = p;
   $("callState").textContent = PHASE_TEXT[p] + (state.inCall && !$("useCtx").checked ? " · cold start" : "");
 }
@@ -171,60 +248,86 @@ function setCall(on) {
 }
 
 /* ---------- audio out ---------- */
+let outCtx = null;  // one AudioContext for Payal's voice: chunks are scheduled back to back, no gaps
+function speaker() {
+  if (!outCtx || outCtx.state === "closed") outCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (outCtx.state === "suspended") outCtx.resume();
+  return outCtx;
+}
+
 function stopSpeaking() {
-  if (call.audio) { call.audio.onended = null; call.audio.pause(); call.audio = null; }
+  for (const s of call.sources || []) { try { s.onended = null; s.stop(); } catch {} }
+  call.sources = []; call.audio = null;
   if ("speechSynthesis" in window) speechSynthesis.cancel();
 }
 
-function playOne(text, b64, gen) {
+function browserVoice(text, gen) {  // offline fallback only
   return new Promise((resolve) => {
-    if (gen !== call.gen) return resolve(false);
-    const done = () => resolve(gen === call.gen);
-    if (b64) {
-      call.audio = new Audio("data:audio/wav;base64," + b64);
-      call.audio.onended = done; call.audio.onerror = done;
-      call.audio.play().catch(done);
-      return;
-    }
-    if (!("speechSynthesis" in window)) return done();
+    if (gen !== call.gen || !("speechSynthesis" in window)) return resolve(gen === call.gen);
     const u = new SpeechSynthesisUtterance(text);
     u.lang = state.lang || "hi-IN"; u.rate = 1.02;
     const v = speechSynthesis.getVoices().find((x) => x.lang.replace("_", "-") === u.lang)
       || speechSynthesis.getVoices().find((x) => /[-_]IN$/i.test(x.lang));
     if (v) u.voice = v;
-    u.onend = done; u.onerror = done;
+    u.onend = () => resolve(gen === call.gen); u.onerror = u.onend;
     speechSynthesis.speak(u);
   });
 }
 
-/* Bulbul time grows with length: synthesise a short head phrase and the rest in parallel and start playing the
-   head as soon as it arrives (same rule as Sarvam.speech_chunks — 2 TTS requests per reply). */
+/* Play Bulbul audio pieces seamlessly: each piece is decoded as soon as it arrives and scheduled to start exactly
+   when the previous one ends. Separate <audio> elements left an audible "head … pause … rest" mid-sentence. */
+async function playPieces(pieces, gen) {
+  const ctx = speaker();
+  let at = ctx.currentTime, last = null;
+  call.sources = [];
+  for (const piece of pieces) {
+    const b64 = await piece;
+    if (gen !== call.gen) return false;
+    if (!b64) continue;
+    let buf;
+    try { buf = await ctx.decodeAudioData(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer); }
+    catch { continue; }
+    if (gen !== call.gen) return false;
+    const src = ctx.createBufferSource();
+    src.buffer = buf; src.connect(ctx.destination);
+    at = Math.max(at, ctx.currentTime + 0.01);
+    src.start(at); at += buf.duration;
+    call.sources.push(src); last = src; call.audio = src;
+  }
+  if (!last) return gen === call.gen;
+  await new Promise((r) => { last.onended = r; });
+  return gen === call.gen;
+}
+
+/* Split only at a sentence end (a clause split breaks the intonation) — same rule as Sarvam.speech_chunks. */
 function speechChunks(text) {
   text = text.trim();
-  if (text.length <= 70) return text ? [text] : [];
-  let head = text.split(/(?<=[.?!।|])\s+/).find((x) => x.trim());
-  if (head.length > 60) {
-    const cl = head.split(/(?<=[,—;])\s+/).filter((c) => c.trim());
-    let short = cl[0];
-    for (const c of cl.slice(1, -1)) { if (short.length >= 20) break; short += " " + c; }
-    if (short.length < head.length - 10) head = short;
-  }
+  if (text.length <= 90) return text ? [text] : [];
+  const sents = text.split(/(?<=[.?!।|])\s+/).filter((x) => x.trim());
+  if (sents.length < 2) return [text];
+  const head = sents[0];
   const rest = text.slice(head.length).trim();
   return rest ? [head, rest] : [head];
 }
 
 async function say(text, firstAudio) {
   const gen = call.gen;
+  if (!$("voiceOut").checked) {  // text-only replies: the transcript is the answer, go straight back to listening
+    if (state.inCall) setPhase("listening");
+    return;
+  }
   setPhase("speaking");
-  if (firstAudio || state.modes.tts !== "sarvam") {
-    await playOne(text, firstAudio, gen);
+  if (firstAudio) {
+    const ok = await playPieces([Promise.resolve(firstAudio)], gen);
+    if (ok && call.sources.length === 0) await browserVoice(text, gen);  // audio could not be decoded
+  } else if (state.modes.tts !== "sarvam") {
+    await browserVoice(text, gen);
   } else {
     const parts = speechChunks(text);
     const jobs = parts.map((p) => api("/api/tts", { text: p, lang: state.lang || "hi-IN", pace: call.pace })
       .then((r) => r.audio).catch(() => null));
-    for (let i = 0; i < parts.length; i++) {
-      if (!(await playOne(parts[i], await jobs[i], gen))) break;
-    }
+    const ok = await playPieces(jobs, gen);
+    if (ok && call.sources.length === 0) await browserVoice(text, gen);  // Sarvam voice failed: still speak
   }
   if (gen === call.gen && state.inCall && call.phase === "speaking") setPhase("listening");
 }
@@ -262,6 +365,7 @@ async function handleReply(r, gen, heardMeta) {
   if (r.lang) state.lang = r.lang;
   call.pace = r.pace || null;
   state.callHist.push({ who: "bot", text: r.text });
+  call.heard = true;
   call.lastBot = bubble("callLog", "bot", r.text, `Payal · ${r.engine} · ${r.llm_ms} ms${r.lang && r.lang !== "hi-IN" ? " · " + r.lang : ""}`);
   await say(r.text, r.audio);
   if (r.end && gen === call.gen) scheduleAutoEnd(gen);  // let the caller add a last word before cutting the call
@@ -402,53 +506,120 @@ function startBrowserRecognition() {
 let samvaadAgent = null;
 let callEngine = "diy"; // "diy" | "samvaad" — which engine the active call is using
 let samvaadFellBack = false; // this call already dropped from Samvaad to the DIY loop; don't do it twice
-
-function samvaadPhase(agentState) {
-  return { idle: "idle", connecting: "connecting", connected: "connecting", listening: "listening",
-          speaking: "speaking", error: "ended" }[agentState] || "listening";
+let samvaadLive = false;     // the Samvaad call got past connecting, so a later "idle" means it was hung up
+/* Samvaad keeps streaming near-silent audio after Payal finishes, which keeps the SDK's own state stuck on
+   "speaking" — so the call screen follows what is actually audible instead: her playback level, plus the
+   engine's user_speech_start / user_speech_end events. Her opening greeting can't be interrupted (the
+   platform drops caller audio until it ends), so it gets its own status telling the caller to wait. */
+const sv = { lastLoud: 0, loudSince: 0, heardBot: false, greetDone: false, opening: "", tick: null };
+function samvaadLevel(rms, playEndsAt, durMs) {
+  // called when a chunk of her audio is queued for playback; playEndsAt = wall-clock time it finishes playing
+  if (rms < 0.012) return;
+  if (playEndsAt - durMs - sv.lastLoud > 400) sv.loudSince = playEndsAt - durMs;  // a new burst of her voice
+  sv.lastLoud = Math.max(sv.lastLoud, playEndsAt);
+  // a click or breath is not "speaking": only switch after 250 ms of continuous voice
+  if (sv.lastLoud - sv.loudSince < 250 || call.phase === "user") return;
+  sv.heardBot = true;
+  setPhase(sv.greetDone ? "speaking" : "greeting");
+}
+function samvaadTick() {
+  if (callEngine !== "samvaad" || !state.inCall || !sv.heardBot) return;  // greeting not audible yet
+  if (Date.now() - sv.lastLoud > 800 && (call.phase === "speaking" || call.phase === "greeting")) {  // sentence pauses are ~0.4 s
+    if (call.phase === "greeting") sv.greetDone = true;
+    setPhase("listening");
+  }
+}
+function samvaadEvent(ev) {
+  if (ev.type === "server.event.user_interrupt") sv.lastLoud = Date.now();  // her queued audio was just cut
+  if (ev.type === "server.event.user_speech_start" || ev.type === "server.event.user_interrupt") setPhase("user");
+  else if (ev.type === "server.event.user_speech_end") setPhase("thinking");
 }
 
 async function startSamvaadCall() {
   const s = state.samvaad;
   const { ConversationAgent, BrowserAudioInterface, InteractionType } = window.SarvamConvAI;
+  // the SDK asks for the mic only after the socket opens and swallows a denial, leaving the call stuck on
+  // "connecting" — ask first so a blocked mic throws here and the click handler can fall back with a clear reason
+  const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
+  probe.getTracks().forEach((t) => t.stop());
   // Inline the memory as agent variables, exactly as samvaad.build_request does for phone calls: the agent's
   // on_start load_context tool reaches this server only through the public tunnel, so without one running it
   // would fall back to its own default glid and open on the wrong seller. Same-origin, so no token needed.
   const vars = { glid: String(state.glid) };
+  Object.assign(sv, { lastLoud: 0, loudSince: 0, heardBot: false, greetDone: false, opening: "" });
   if ($("useCtx").checked) {
     try {
       const ctx = await api("/sarvam/context?glid=" + encodeURIComponent(state.glid));
       Object.assign(vars, { context: ctx.context_md, opening: ctx.opening_line, language: ctx.language });
+      sv.opening = ctx.opening_line || "";
       state.lang = ctx.language || "hi-IN";
     } catch (err) {
       bubble("callLog", "system", "Could not load the memory file — the agent will open cold: " + err.message);
     }
   }
+  const speakerIf = new BrowserAudioInterface(16000);
   samvaadAgent = new ConversationAgent({
     apiKey: "", baseUrl: "/api/samvaad/",
     config: {
       org_id: s.org_id, workspace_id: s.workspace_id, app_id: s.app_id, version: s.app_version,
-      user_identifier: String(state.glid), user_identifier_type: "glid",
+      // Samvaad only accepts phone_number | email | custom | unknown here — anything else is a bare 403 on the socket
+      user_identifier: String(state.glid), user_identifier_type: "custom",
       interaction_type: InteractionType.CALL, input_sample_rate: 16000, output_sample_rate: 16000,
       agent_variables: vars,
     },
-    audioInterface: new BrowserAudioInterface(16000),
+    audioInterface: speakerIf,
+    eventCallback: samvaadEvent,
     transcriptCallback: async (msg) => {
       if (!msg.content) return;
+      if (msg.role === "bot" && sv.opening && msg.content.trim() === sv.opening.trim()) return;  // already shown
       const who = msg.role === "bot" ? "bot" : "user";
+      if (who === "bot") call.heard = true;
+      else if (call.phase === "user" || call.phase === "listening") setPhase("thinking");  // her reply is being made
       state.callHist.push({ who, text: msg.content });
       call.lastBot = bubble("callLog", who, msg.content, who === "bot" ? "Payal · Samvaad" : undefined);
     },
     stateCallback: (next) => {
       if (next === "error") { fallBackToDiy("Samvaad engine error"); return; }
-      setPhase(samvaadPhase(next));
+      if ((next === "listening" || next === "speaking") && !samvaadLive) {
+        samvaadLive = true;
+        // the greeting is spoken from the agent config and never comes back as a transcript: show it now
+        if (sv.opening) {
+          state.callHist.push({ who: "bot", text: sv.opening });
+          call.lastBot = bubble("callLog", "bot", sv.opening, "Payal · Samvaad · greeting from memory");
+        }
+        setPhase(sv.opening ? "greeting" : "listening");
+        return;
+      }
+      // the agent hung up (it closes the call itself after a goodbye): end and save like a user hang-up
+      if (next === "idle" && samvaadLive && state.inCall && callEngine === "samvaad") {
+        samvaadLive = false;
+        // let her goodbye finish playing before the call screen closes (stop() would cut the last words)
+        const t0 = Date.now();
+        const waitQuiet = () => (Date.now() - sv.lastLoud > 400 || Date.now() - t0 > 8000) ? endCall() : setTimeout(waitQuiet, 150);
+        waitQuiet();
+        return;
+      }
+      if (next === "connecting" || next === "connected") setPhase("connecting");  // speaking/listening come from the audio
     },
   });
+  clearInterval(sv.tick); sv.tick = setInterval(samvaadTick, 150);
   await samvaadAgent.start();
   await samvaadAgent.waitForConnect(10);
+  // the SDK only forwards her playback level while its own state says "speaking" (and never after she hangs up);
+  // read it straight from the player so the status and the goodbye wait follow what is actually audible
+  let lastQueuedEnd = 0;
+  speakerIf.setOutputLevelCallback((l) => {
+    const ctx = speakerIf.playbackContext;
+    if (!ctx) return;
+    const endsAt = Date.now() + Math.max(0, speakerIf.nextPlayTime - ctx.currentTime) * 1000;
+    const dur = lastQueuedEnd ? Math.max(0, Math.min(1000, endsAt - Math.max(lastQueuedEnd, Date.now()))) : 100;
+    lastQueuedEnd = endsAt;
+    samvaadLevel(l.rms, endsAt, dur);
+  });
 }
 
 async function endSamvaadCall() {
+  clearInterval(sv.tick); sv.tick = null;
   if (!samvaadAgent) return;
   try { await samvaadAgent.stop(); } catch {}
   samvaadAgent = null;
@@ -456,23 +627,26 @@ async function endSamvaadCall() {
 
 /* ---------- call lifecycle ---------- */
 async function startDiyCall() {
+  speaker();  // create the output audio context inside the click (browsers need a user gesture for audio)
   callEngine = "diy";
   $("muteBtn").hidden = false;                       // undo whatever the Samvaad branch disabled, in case
   $("sayText").disabled = false; $("sayBtn").disabled = false;   // we got here by falling back
   $("sayText").placeholder = "…or type what the caller says";
   setCall(true); setPhase("connecting"); renderSayChips();
-  const sarvamEars = state.modes.stt === "sarvam" && navigator.mediaDevices?.getUserMedia;
+  const micOn = $("micIn").checked;
+  const sarvamEars = micOn && state.modes.stt === "sarvam" && navigator.mediaDevices?.getUserMedia;
   try { if (sarvamEars) await startMic(); }
   catch (err) {
     bubble("callLog", "system", "Microphone blocked — allow it from the lock icon next to the address bar, or type below.");
   }
+  if (!micOn) bubble("callLog", "system", "Mic input is off — type what the caller says below.");
   bubble("callLog", "system", $("useCtx").checked ? `Payal loaded ${state.role}.md (v${$("version").textContent.replace(/^v/, "")})` : "Cold start — no memory loaded (today's VANI)");
   try {
     const r = await api("/api/call/start", { glid: state.glid, use_context: $("useCtx").checked });
     state.lang = r.lang || "hi-IN";
     state.callHist.push({ who: "bot", text: r.text });
     call.lastBot = bubble("callLog", "bot", r.text, `Payal · ${r.audio ? "Sarvam Bulbul" : "browser voice"}${r.prewarmed ? " · ready in " + r.ms + " ms" : ""}${state.lang !== "hi-IN" ? " · " + state.lang + " (from call history)" : ""}`);
-    if (!sarvamEars) startBrowserRecognition();
+    if (!sarvamEars && micOn) startBrowserRecognition();
     await say(r.text, r.audio);
   } catch (err) { bubble("callLog", "system", "Could not start the call: " + err.message); endCall(); }
 }
@@ -490,12 +664,14 @@ async function fallBackToDiy(why) {
 $("callBtn").addEventListener("click", async () => {
   if (!state.glid || state.inCall) return;
   state.callHist = []; call.gen++; cancelAutoEnd(); call.lastBot = null; call.pace = null; call.muted = false;
-  samvaadFellBack = false;
+  samvaadFellBack = false; samvaadLive = false; call.saved = false; call.heard = false;
   $("muteBtn").setAttribute("aria-pressed", "false"); $("muteBtn").textContent = "Mute";
   $("callLog").innerHTML = "";
   // same three conditions that reveal the toggle: on by default, so a missing SDK or unconfigured agent has to
   // fall through to the DIY loop rather than throw inside startSamvaadCall
-  if ($("useSamvaad").checked && state.samvaad && state.samvaad.configured && window.SarvamConvAI) {
+  // the real-time engine is voice-only, so it needs the mic on and Payal's voice on
+  if ($("useSamvaad").checked && $("micIn").checked && $("voiceOut").checked
+      && state.samvaad && state.samvaad.configured && window.SarvamConvAI) {
     callEngine = "samvaad";
     setCall(true); setPhase("connecting"); renderSayChips();
     $("muteBtn").hidden = true; // mic muting isn't exposed by the SDK yet
@@ -511,10 +687,20 @@ $("callBtn").addEventListener("click", async () => {
 async function endCall() {
   if (!state.inCall) return;
   if (callEngine === "samvaad") {
+    samvaadLive = false;  // stop() below emits "idle" — that must not re-enter endCall
     await endSamvaadCall();
     call.gen++; cancelAutoEnd();
     setCall(false); setPhase("ended"); $("muteBtn").hidden = true;
-    bubble("callLog", "system", "Call ended — the agent's own save_call tool writes the summary back to memory.");
+    // save from the transcript we already hold rather than relying on the agent's save_call tool, which can only
+    // reach this server through the public tunnel; the server drops that tool's duplicate if it does arrive
+    if (!state.callHist.some((h) => h.who === "user")) {
+      bubble("callLog", "system", "Call ended before the user said anything — nothing new to save.");
+      return;
+    }
+    try {
+      const r = await api("/api/call/end", { glid: state.glid, history: state.callHist, engine: "samvaad" });
+      if (r.summary) { call.saved = true; setPhase("ended"); bubble("callLog", "system", `Saved to memory: ${r.summary.disposition} — ${r.summary.summary}`, `file v${r.version} · ${r.freshness_ms} ms`); }
+    } catch (err) { bubble("callLog", "system", "Could not save the call: " + err.message); }
     return;
   }
   call.gen++; cancelAutoEnd(); stopSpeaking(); stopMic();
@@ -526,7 +712,7 @@ async function endCall() {
   }
   try {
     const r = await api("/api/call/end", { glid: state.glid, history: state.callHist });
-    if (r.summary) bubble("callLog", "system", `Saved to memory: ${r.summary.disposition} — ${r.summary.summary}`, `file v${r.version} · ${r.freshness_ms} ms`);
+    if (r.summary) { call.saved = true; setPhase("ended"); bubble("callLog", "system", `Saved to memory: ${r.summary.disposition} — ${r.summary.summary}`, `file v${r.version} · ${r.freshness_ms} ms`); }
   } catch (err) { bubble("callLog", "system", "Could not save the call: " + err.message); }
 }
 $("endBtn").addEventListener("click", endCall);
@@ -601,6 +787,7 @@ async function loadStatus() {
   setupPhone(s.samvaad && s.samvaad.phone);
   state.modes = s.modes;
   state.samvaad = s.samvaad;
+  if (s.token_budget) state.tokenBudget = s.token_budget;
   $("engineToggleWrap").hidden = !(s.samvaad && s.samvaad.configured && window.SarvamConvAI);
   const chip = (label, val, live) => `<span class="chip ${live ? "live" : "off"}">${label}: ${val}</span>`;
   $("status").innerHTML =
@@ -620,11 +807,20 @@ async function loadMetrics() {
 $("role").addEventListener("change", (e) => { state.role = e.target.value; loadUsers(); });
 $("user").addEventListener("change", (e) => selectUser(e.target.value));
 let t; $("search").addEventListener("input", (e) => { clearTimeout(t); t = setTimeout(() => loadUsers(e.target.value.trim()), 300); });
-$("rebuild").addEventListener("click", async () => { const d = await api(`/api/context/${state.glid}?rebuild=true`); showDoc(d, true); stamp("rebuilt from history"); });
-$("useCtx").addEventListener("change", () => { document.querySelector(".toggle span").textContent = $("useCtx").checked ? "Bot memory on" : "Bot memory off"; });
+$("rebuild").addEventListener("click", async () => {
+  const d = await api(`/api/context/${state.glid}?rebuild=true`);
+  showDoc(d, true); stamp("rebuilt from history", document.querySelectorAll(".md .chg").length);
+});
+function syncMemoryToggle() {
+  const on = $("useCtx").checked;
+  $("useCtxLabel").textContent = on ? "Bot memory on" : "Bot memory off";
+  $("cmpOn").classList.toggle("active", on); $("cmpOff").classList.toggle("active", !on);
+}
+$("useCtx").addEventListener("change", syncMemoryToggle);
 
 (async () => {
   if ("speechSynthesis" in window) speechSynthesis.getVoices();
+  renderStories(); syncMemoryToggle();
   await loadStatus();
   connectStream();
   await loadUsers();
