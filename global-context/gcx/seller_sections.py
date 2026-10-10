@@ -90,7 +90,10 @@ class Ctx:
         if days is not None:
             cut = self.now - timedelta(days=days)
             out = [e for e in out if e["ts"] >= cut]
-        return sorted(out, key=lambda e: e["ts"], reverse=True)
+        # ts is stored to the second, so merging channels needs the same (ts, id) tie-break the store and
+        # _later_answered_call use — a plain stable sort on ts alone would order a same-second burst by the
+        # position its channel was passed in, not by arrival
+        return sorted(out, key=lambda e: (e["ts"], e.get("id", 0)), reverse=True)
 
     def flag(self, key: str) -> bool:
         if self.strict_pit:

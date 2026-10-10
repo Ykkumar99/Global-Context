@@ -281,6 +281,122 @@ def test_public_tunnel_only_reaches_sarvam_hooks_with_token():
     assert r.get("skipped") and api.engine.get(146010610)["version"] == v
 
 
+def test_phone_call_outbound_request_and_webhook_write_back(monkeypatch):
+    """Instant Outbound: body matches the documented OutboundRequest, the webhook writes a connected call back once,
+    the agent's on_end hook does not double-write it, and unanswered calls leave memory untouched."""
+    from fastapi.testclient import TestClient
+    import gcx.api as api
+    from gcx import samvaad
+    api.engine = eng()
+    api.agent.eng = api.engine
+    for k, v in {"SARVAM_SAMVAAD_API_KEY": "k3y", "GCX_SAMVAAD_CONNECTION_ID": "conn-1",
+                 "GCX_SAMVAAD_AGENT_PHONE_NUMBER": "+918000000000", "GCX_PUBLIC_URL": "https://demo.trycloudflare.com/",
+                 "GCX_TUNNEL_TOKEN": "t0ken"}.items():
+        monkeypatch.setenv(k, v)
+    assert samvaad.normalise_phone("098765 43210") == "+919876543210" == samvaad.normalise_phone("+91 98765-43210")
+    sent = {}
+
+    class R:
+        status_code, text = 200, ""
+
+        @staticmethod
+        def json():
+            return {"attempt_id": "att-1"}
+
+    def fake_post(url, json, headers, timeout):
+        sent.update(url=url, body=json, headers=headers)
+        return R()
+    monkeypatch.setattr(samvaad.requests, "post", fake_post)
+    c = TestClient(api.app)
+    g = 146010610
+    assert c.post("/api/phone-call", json={"glid": g, "phone": "9876543210"},
+                  headers={"cf-connecting-ip": "1.2.3.4"}).status_code == 403  # never dialable from the tunnel
+    r = c.post("/api/phone-call", json={"glid": g, "phone": "9876543210"}).json()
+    assert r["attempt_id"] == "att-1" and r["webhook"] and r["phone"].endswith("10") and "xxxx" in r["phone"]
+    assert sent["url"].endswith("/orgs/01a1110c-209c-7de3-844d-cbd1f15f165a/workspaces/"
+                                "01a1110c-20a4-7547-b624-024fbcef0dc5/outbounds")
+    assert sent["headers"]["X-API-Key"] == "k3y"
+    b = sent["body"]
+    assert b["user_config"] == {"user_phone_number": "+919876543210"}
+    assert b["app_config"]["app_version"] == 1 and b["app_config"]["connection_config"] == {
+        "connection_id": "conn-1", "agent_phone_number": "+918000000000"}
+    av = b["app_config"]["agent_variables"]
+    assert av["glid"] == str(g) and av["context"].startswith("---") and av["opening"]
+    assert b["webhook_config"]["url"] == "https://demo.trycloudflare.com/sarvam/outbound-webhook?token=t0ken"
+    assert b["webhook_config"]["metadata"]["glid"] == g
+
+    cf = {"cf-connecting-ip": "1.2.3.4"}
+    v0 = api.engine.get(g)["version"]
+    # the agent's on_end save_call arrives too — the webhook owns this call, so nothing is written twice
+    s = c.post("/sarvam/call-ended?token=t0ken", json={"glid": g, "transcript": "user: haan boliye"}, headers=cf).json()
+    assert s.get("skipped") and api.engine.get(g)["version"] == v0
+    hook = {"attempt_id": "att-1", "status": "connected", "duration": 42.5, "interaction_id": "20261010/abc",
+            "channel_info": {"channel_type": "v2v", "channel_provider": "exotel", "agent_phone_number": "+918000000000"},
+            "failure_reason": None, "final_agent_variables": {"glid": str(g)},
+            "webhook_config": {"url": "x", "metadata": {"glid": g}},
+            "interaction_transcript": [{"role": "agent", "en_text": "Namaste, main Payal, IndiaMART se."},
+                                       {"role": "user", "en_text": "Haan, kal 4 baje meeting theek hai."}]}
+    assert c.post(samvaad.WEBHOOK_PATH, json=hook, headers=cf).status_code == 403          # token required
+    w = c.post(samvaad.WEBHOOK_PATH + "?token=t0ken", json=hook, headers=cf).json()
+    assert w["summary"]["disposition"] and w["version"] > v0
+    ev = api.engine.store.events(g, api.engine.now(), channels=["voice_call"])[0]
+    assert ev["meta"]["attempt_id"] == "att-1" and ev["meta"]["duration"] == 42
+    assert c.post(samvaad.WEBHOOK_PATH + "?token=t0ken", json=hook, headers=cf).json().get("duplicate")  # retry
+    assert api.engine.get(g)["version"] == w["version"]
+    assert not samvaad.webhook_owns(api.engine.store, g)  # resolved → on_end hook works normally again
+
+    # unanswered: shown, not remembered (a voice_call event would close the seller's open WhatsApp question)
+    sent.clear()
+    R.json = staticmethod(lambda: {"attempt_id": "att-2"})
+    c.post("/api/phone-call", json={"glid": g, "phone": "9876543210"})
+    v1 = api.engine.get(g)["version"]
+    n = c.post(samvaad.WEBHOOK_PATH + "?token=t0ken", headers=cf, json={
+        "attempt_id": "att-2", "status": "no_answer", "duration": None, "interaction_id": None,
+        "channel_info": {}, "webhook_config": {"url": "x", "metadata": {"glid": g}}, "interaction_transcript": None}).json()
+    assert n["status"] == "no_answer" and api.engine.get(g)["version"] == v1
+    hist = c.get("/api/phone-calls").json()["attempts"]
+    assert [a["status"] for a in hist[:2]] == ["no_answer", "connected"]
+
+
+def test_phone_call_reports_missing_config(monkeypatch):
+    from fastapi.testclient import TestClient
+    import gcx.api as api
+    api.engine = eng()
+    api.agent.eng = api.engine
+    monkeypatch.setenv("SARVAM_SAMVAAD_API_KEY", "k3y")
+    monkeypatch.setenv("GCX_SAMVAAD_CONNECTION_ID", "")
+    monkeypatch.setenv("GCX_SAMVAAD_AGENT_PHONE_NUMBER", "")
+    r = TestClient(api.app).post("/api/phone-call", json={"glid": 146010610, "phone": "9876543210"})
+    assert r.status_code == 503 and "connection_id" in r.json()["detail"]
+
+
+def test_tts_lexicon_respells_brands_in_the_target_script():
+    from gcx.pronounce import for_tts
+    hi = for_tts("Main IndiaMART se bol rahi hoon, WhatsApp par.", "hi-IN")
+    assert "इंडियामार्ट" in hi and "व्हाट्सएप" in hi and "मैं" in hi
+    assert "IndiaMART" not in hi and "WhatsApp" not in hi
+    assert "ઇન્ડિયામાર્ટ" in for_tts("IndiaMART", "gu-IN")
+    assert "ইন্ডিয়া মার্ট" in for_tts("IndiaMART", "bn-IN")
+    assert for_tts("IndiaMART", "en-IN") == "India Mart"   # all-caps MART invites letter-by-letter spelling
+    assert for_tts("IndiaMART", "ta-IN") == "IndiaMART"    # language with no table: left alone
+
+
+def test_tts_lexicon_transliterates_and_never_translates():
+    """/transliterate returns a translation for some words — those are pinned by hand, and a regression
+    here would have Payal saying a different word (योजना 'yojana' instead of 'plan')."""
+    from gcx.pronounce import LEXICON, for_tts
+    assert for_tts("plan", "hi-IN") == "प्लान" and for_tts("plan", "mr-IN") == "प्लान"
+    for bad in ("योजना", "खाता", "खाते", "संख्या", "क्रमांक", "भुगतान", "आदेश", "सेवा", "उत्पाद", "मिंट्स"):
+        assert bad not in LEXICON["hi-IN"].values() and bad not in LEXICON["mr-IN"].values(), bad
+
+
+def test_tts_lexicon_matches_whole_latin_words_only():
+    from gcx.pronounce import for_tts
+    assert for_tts("mainly a domain name", "hi-IN") == "mainly a domain name"  # not "main" inside "mainly"
+    assert for_tts("suppliers", "hi-IN") == "सप्लायर्स"                        # longest term wins
+    assert for_tts("", "hi-IN") == ""
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

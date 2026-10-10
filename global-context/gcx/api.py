@@ -26,6 +26,7 @@ import time
 from collections import deque
 from contextlib import asynccontextmanager
 
+import requests
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
@@ -37,6 +38,7 @@ from . import seller_sections as S
 from .agent import MOOD_PACE, Agent, detect_lang, detect_mood
 from .config import ROOT, get_config
 from .engine import ContextEngine
+from . import samvaad
 from .sarvam import client as sarvam_client
 from .textutil import clean
 
@@ -204,7 +206,7 @@ def status():
     stats = engine.store.get_meta("ingest_stats", {})
     return {"version": __version__, "modes": sarvam.mode(), "as_of": str(engine.now())[:19],
             "events": engine.store.event_count(), "ingest": stats, "token_budget": engine.budget,
-            "sarvam_stats": sarvam.stats}
+            "sarvam_stats": sarvam.stats, "samvaad": samvaad_config()}
 
 
 @app.get("/api/users")
@@ -405,6 +407,8 @@ class CallEnded(BaseModel):
 @app.post("/sarvam/call-ended")
 def sarvam_call_ended(c: CallEnded):
     _need(c.glid)
+    if samvaad.webhook_owns(engine.store, c.glid):  # a phone call we placed: its outbound webhook writes the outcome back once
+        return {"skipped": True, "reason": "outbound webhook will write this call back"}
     if c.summary:
         d = engine.on_event(c.glid, "voice_call", c.disposition or "General (talked)", c.summary,
                             {"agent": "Sarvam voice agent", "live": 1})
@@ -426,3 +430,80 @@ def sarvam_call_ended(c: CallEnded):
         return {"skipped": True, "reason": "no user speech in transcript"}
     out = agent.end_call(c.glid, hist, "Sarvam voice agent")
     return {"summary": out["summary"], "version": out["doc"]["version"]}
+
+
+# --------------------------------------------------- Samvaad (real duplex call engine, browser SDK)
+SAMVAAD_RUNTIME = "https://apps.sarvam.ai/api/app-runtime/"
+
+
+def samvaad_config() -> dict:
+    s = (cfg.samvaad or {})
+    ids = {"org_id": s.get("org_id") or "", "workspace_id": s.get("workspace_id") or "", "app_id": s.get("app_id") or "",
+           "app_version": s.get("app_version") or 1}
+    return {**ids, "configured": bool(cfg.samvaad_key) and all([ids["org_id"], ids["workspace_id"], ids["app_id"]]),
+            "phone": samvaad.status()}
+
+
+# --------------------------------------- Samvaad Instant Outbound: Payal rings a real phone
+class PhoneCallIn(BaseModel):
+    glid: int
+    phone: str
+    lang: str | None = None  # override the language picked from the memory file (e.g. "gu-IN")
+
+
+@app.post("/api/phone-call")
+def phone_call(p: PhoneCallIn):
+    """Local-only (the tunnel guard blocks it from outside): dial a phone with this GLID's memory loaded."""
+    _need(p.glid)
+    ctx = sarvam_context(p.glid)
+    try:
+        rec = samvaad.place_call(engine.store, p.glid, p.phone, ctx, lang=p.lang)
+    except samvaad.OutboundError as e:
+        raise HTTPException(e.status, str(e))
+    _push(p.glid, {"type": "phone", "glid": p.glid, **rec})
+    return {**rec, "opening_line": ctx["opening_line"], "version": ctx["version"]}
+
+
+@app.get("/api/phone-calls")
+def phone_calls(limit: int = 20):
+    return {"status": samvaad.status(), "attempts": samvaad.attempts(engine.store, limit)}
+
+
+@app.post(samvaad.WEBHOOK_PATH)
+def sarvam_outbound_webhook(payload: dict):
+    """Sarvam POSTs here after every Instant Outbound attempt. Reached through the tunnel with ?token=."""
+    rec, glid, first = samvaad.record_result(engine.store, payload)
+    out: dict = {"ok": True, "status": payload.get("status")}
+    if not first:
+        return {**out, "duplicate": True}
+    if glid and payload.get("status") == "connected":
+        hist = samvaad.transcript_to_history(payload.get("interaction_transcript"))
+        if any(h["who"] == "user" for h in hist):
+            meta = {k: payload.get(k) for k in ("attempt_id", "interaction_id") if payload.get(k)}
+            if payload.get("duration") is not None:
+                meta["duration"] = round(float(payload["duration"]))
+            res = agent.end_call(glid, hist, "Sarvam phone call", meta)
+            out.update(summary=res["summary"], version=res["doc"]["version"])
+        else:
+            out.update(skipped=True, reason="no user speech in transcript")
+    # no_answer / busy / failed are shown live but not written into memory: a voice_call event there would be read
+    # as "answered" and close the seller's open WhatsApp question
+    if glid:
+        _push(glid, {"type": "phone", "glid": glid, **(rec or {}), **{k: v for k, v in out.items() if k != "ok"}})
+    return out
+
+
+@app.get("/api/samvaad/{path:path}")
+def samvaad_proxy(path: str, request: Request):
+    """Proxies the one REST call the Samvaad browser SDK makes (mint a short-lived signed WebSocket URL) so the
+    real Sarvam API key never reaches the browser. After this, the SDK talks to Sarvam directly for call audio —
+    we never see or relay the media stream."""
+    if not cfg.samvaad_key:
+        raise HTTPException(503, "SARVAM_SAMVAAD_API_KEY not configured")
+    try:
+        r = requests.get(SAMVAAD_RUNTIME + path, params=dict(request.query_params),
+                         headers={"X-API-Key": cfg.samvaad_key}, timeout=10)
+    except requests.RequestException as e:
+        raise HTTPException(502, f"Samvaad upstream error: {e}")
+    return Response(content=r.content, status_code=r.status_code,
+                    media_type=r.headers.get("content-type", "application/json"))

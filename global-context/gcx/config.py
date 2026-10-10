@@ -61,6 +61,10 @@ class Config(dict):
     def fallback_key(self) -> str | None:
         return os.environ.get("FALLBACK_LLM_API_KEY") or None
 
+    @property
+    def samvaad_key(self) -> str | None:
+        return os.environ.get("SARVAM_SAMVAAD_API_KEY") or None
+
 
 _CFG: Config | None = None
 

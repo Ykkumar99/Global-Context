@@ -24,6 +24,7 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 
 from .config import get_config
+from .pronounce import for_tts
 
 log = logging.getLogger("gcx.sarvam")
 _THINK = re.compile(r"<think>.*?</think>", re.S)
@@ -204,6 +205,10 @@ class Sarvam:
         reply comes back in ~the time of its longest sentence instead of the sum (~40% faster in tests)."""
         if not self.key or not text.strip():
             return None
+        lang = language or self.s.get("tts_language", "hi-IN")
+        # respell brand and domain words in this language's own script before chunking, so a term split
+        # across two chunks is still replaced consistently
+        text = for_tts(text, lang)
         parts = self.speech_chunks(text)
         if len(parts) < 2:
             return self._tts_one(text, speaker, language, pace)

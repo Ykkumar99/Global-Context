@@ -140,8 +140,9 @@ $("waForm").addEventListener("submit", async (e) => {
 const call = {
   phase: "idle", gen: 0, muted: false, stream: null, ctx: null, proc: null, src: null,
   noise: 0.008, inSpeech: false, voicedMs: 0, silentMs: 0, frames: [], pre: [], preMs: 0, sr: 48000,
-  audio: null, timer: null, t0: 0, lastBot: null, pace: null,
+  audio: null, timer: null, t0: 0, lastBot: null, pace: null, idleEndTimer: null,
 };
+const END_IDLE_MS = 3000;  // after the bot's goodbye, give the caller a few seconds to add a last word
 const VAD = { startMs: 140, bargeMs: 200, endMs: 750, preRollMs: 1000, maxMs: 15000, minMs: 350 };
 const PHASE_TEXT = {
   idle: "Ready to call", connecting: "Connecting…", listening: "Listening…", user: "You're speaking…",
@@ -229,14 +230,28 @@ async function say(text, firstAudio) {
 }
 
 /* ---------- conversation ---------- */
+function cancelAutoEnd() {
+  clearTimeout(call.idleEndTimer);
+  call.idleEndTimer = null;
+}
+
+function scheduleAutoEnd(gen) {
+  cancelAutoEnd();
+  call.idleEndTimer = setTimeout(() => {
+    if (gen === call.gen && state.inCall) endCall();
+  }, END_IDLE_MS);
+}
+
 function bargeIn() {
   call.gen++;  // any reply still on its way is now stale
+  cancelAutoEnd();
   stopSpeaking();
   if (call.lastBot && !call.lastBot.dataset.cut) {
     call.lastBot.dataset.cut = "1";
     call.lastBot.querySelector(".meta").textContent += " · interrupted";
-    const h = state.callHist[state.callHist.length - 1];
-    if (h && h.who === "bot") h.text += " [interrupted by the caller]";
+    // Deliberately not written into state.callHist: that array is sent back as literal conversation
+    // history on the next turn, and a bracketed note there reads to the LLM as something it said out
+    // loud — it has no way to know it's a system annotation, so it tries to explain or repeat it.
   }
 }
 
@@ -249,7 +264,7 @@ async function handleReply(r, gen, heardMeta) {
   state.callHist.push({ who: "bot", text: r.text });
   call.lastBot = bubble("callLog", "bot", r.text, `Payal · ${r.engine} · ${r.llm_ms} ms${r.lang && r.lang !== "hi-IN" ? " · " + r.lang : ""}`);
   await say(r.text, r.audio);
-  if (r.end && gen === call.gen) await endCall();
+  if (r.end && gen === call.gen) scheduleAutoEnd(gen);  // let the caller add a last word before cutting the call
 }
 
 async function sendAudioTurn(wav) {
@@ -269,6 +284,7 @@ async function sendAudioTurn(wav) {
 }
 
 async function sendTextTurn(text) {
+  cancelAutoEnd();
   if (call.phase === "speaking" || call.phase === "thinking") bargeIn();
   const gen = call.gen;
   setPhase("thinking");
@@ -328,6 +344,7 @@ function onFrame(d) {
     if (call.voicedMs >= (talking || call.phase === "thinking" ? VAD.bargeMs : VAD.startMs)) {
       call.inSpeech = true; call.silentMs = 0;
       call.frames = call.pre.slice(); call.pre = []; call.preMs = 0;
+      cancelAutoEnd();  // the caller is adding a last word — don't cut the call under them
       if (call.phase === "speaking" || call.phase === "thinking") bargeIn();
       setPhase("user");
     }
@@ -371,7 +388,7 @@ function startBrowserRecognition() {
   const r = new SR(); r.lang = state.lang || "hi-IN"; r.continuous = true; r.interimResults = true;
   r.onresult = (e) => {
     const res = e.results[e.results.length - 1];
-    if (!res.isFinal) { if (call.phase === "speaking" || call.phase === "thinking") bargeIn(); setPhase("user"); return; }
+    if (!res.isFinal) { cancelAutoEnd(); if (call.phase === "speaking" || call.phase === "thinking") bargeIn(); setPhase("user"); return; }
     const text = res[0].transcript.trim();
     if (text && !call.muted) sendTextTurn(text).then(() => {});
   };
@@ -379,12 +396,70 @@ function startBrowserRecognition() {
   r.start(); call.rec = r;
 }
 
+/* ---------- Samvaad real-engine call: native turn-taking/barge-in/silence handling, replaces the DIY loop
+   above entirely for the duration of the call. The platform's own on_end "save_call" tool writes the summary
+   back (same /sarvam/call-ended hook used by phone calls), so this path never calls /api/call/end itself. */
+let samvaadAgent = null;
+let callEngine = "diy"; // "diy" | "samvaad" — which engine the active call is using
+let samvaadFellBack = false; // this call already dropped from Samvaad to the DIY loop; don't do it twice
+
+function samvaadPhase(agentState) {
+  return { idle: "idle", connecting: "connecting", connected: "connecting", listening: "listening",
+          speaking: "speaking", error: "ended" }[agentState] || "listening";
+}
+
+async function startSamvaadCall() {
+  const s = state.samvaad;
+  const { ConversationAgent, BrowserAudioInterface, InteractionType } = window.SarvamConvAI;
+  // Inline the memory as agent variables, exactly as samvaad.build_request does for phone calls: the agent's
+  // on_start load_context tool reaches this server only through the public tunnel, so without one running it
+  // would fall back to its own default glid and open on the wrong seller. Same-origin, so no token needed.
+  const vars = { glid: String(state.glid) };
+  if ($("useCtx").checked) {
+    try {
+      const ctx = await api("/sarvam/context?glid=" + encodeURIComponent(state.glid));
+      Object.assign(vars, { context: ctx.context_md, opening: ctx.opening_line, language: ctx.language });
+      state.lang = ctx.language || "hi-IN";
+    } catch (err) {
+      bubble("callLog", "system", "Could not load the memory file — the agent will open cold: " + err.message);
+    }
+  }
+  samvaadAgent = new ConversationAgent({
+    apiKey: "", baseUrl: "/api/samvaad/",
+    config: {
+      org_id: s.org_id, workspace_id: s.workspace_id, app_id: s.app_id, version: s.app_version,
+      user_identifier: String(state.glid), user_identifier_type: "glid",
+      interaction_type: InteractionType.CALL, input_sample_rate: 16000, output_sample_rate: 16000,
+      agent_variables: vars,
+    },
+    audioInterface: new BrowserAudioInterface(16000),
+    transcriptCallback: async (msg) => {
+      if (!msg.content) return;
+      const who = msg.role === "bot" ? "bot" : "user";
+      state.callHist.push({ who, text: msg.content });
+      call.lastBot = bubble("callLog", who, msg.content, who === "bot" ? "Payal · Samvaad" : undefined);
+    },
+    stateCallback: (next) => {
+      if (next === "error") { fallBackToDiy("Samvaad engine error"); return; }
+      setPhase(samvaadPhase(next));
+    },
+  });
+  await samvaadAgent.start();
+  await samvaadAgent.waitForConnect(10);
+}
+
+async function endSamvaadCall() {
+  if (!samvaadAgent) return;
+  try { await samvaadAgent.stop(); } catch {}
+  samvaadAgent = null;
+}
+
 /* ---------- call lifecycle ---------- */
-$("callBtn").addEventListener("click", async () => {
-  if (!state.glid || state.inCall) return;
-  state.callHist = []; call.gen++; call.lastBot = null; call.pace = null; call.muted = false;
-  $("muteBtn").setAttribute("aria-pressed", "false"); $("muteBtn").textContent = "Mute";
-  $("callLog").innerHTML = "";
+async function startDiyCall() {
+  callEngine = "diy";
+  $("muteBtn").hidden = false;                       // undo whatever the Samvaad branch disabled, in case
+  $("sayText").disabled = false; $("sayBtn").disabled = false;   // we got here by falling back
+  $("sayText").placeholder = "…or type what the caller says";
   setCall(true); setPhase("connecting"); renderSayChips();
   const sarvamEars = state.modes.stt === "sarvam" && navigator.mediaDevices?.getUserMedia;
   try { if (sarvamEars) await startMic(); }
@@ -400,11 +475,49 @@ $("callBtn").addEventListener("click", async () => {
     if (!sarvamEars) startBrowserRecognition();
     await say(r.text, r.audio);
   } catch (err) { bubble("callLog", "system", "Could not start the call: " + err.message); endCall(); }
+}
+
+/* Samvaad can fail at two points — a throw from start(), or an async "error" state once connected. Either way
+   the demo should keep working on the built-in loop rather than dead-ending on an ended call. */
+async function fallBackToDiy(why) {
+  if (samvaadFellBack || !state.inCall) return;
+  samvaadFellBack = true;
+  bubble("callLog", "system", why + " — falling back to the built-in voice loop for this call.");
+  try { await endSamvaadCall(); } catch {}
+  await startDiyCall();
+}
+
+$("callBtn").addEventListener("click", async () => {
+  if (!state.glid || state.inCall) return;
+  state.callHist = []; call.gen++; cancelAutoEnd(); call.lastBot = null; call.pace = null; call.muted = false;
+  samvaadFellBack = false;
+  $("muteBtn").setAttribute("aria-pressed", "false"); $("muteBtn").textContent = "Mute";
+  $("callLog").innerHTML = "";
+  // same three conditions that reveal the toggle: on by default, so a missing SDK or unconfigured agent has to
+  // fall through to the DIY loop rather than throw inside startSamvaadCall
+  if ($("useSamvaad").checked && state.samvaad && state.samvaad.configured && window.SarvamConvAI) {
+    callEngine = "samvaad";
+    setCall(true); setPhase("connecting"); renderSayChips();
+    $("muteBtn").hidden = true; // mic muting isn't exposed by the SDK yet
+    $("sayText").disabled = true; $("sayBtn").disabled = true; $("sayText").placeholder = "Real-time engine — just talk, typed replies aren't routed to it";
+    bubble("callLog", "system", "Connecting to the real Samvaad engine — native turn-taking, barge-in and silence handling.");
+    try { await startSamvaadCall(); }
+    catch (err) { await fallBackToDiy("Samvaad unavailable (" + err.message + ")"); }
+    return;
+  }
+  await startDiyCall();
 });
 
 async function endCall() {
   if (!state.inCall) return;
-  call.gen++; stopSpeaking(); stopMic();
+  if (callEngine === "samvaad") {
+    await endSamvaadCall();
+    call.gen++; cancelAutoEnd();
+    setCall(false); setPhase("ended"); $("muteBtn").hidden = true;
+    bubble("callLog", "system", "Call ended — the agent's own save_call tool writes the summary back to memory.");
+    return;
+  }
+  call.gen++; cancelAutoEnd(); stopSpeaking(); stopMic();
   if (call.rec) { call.rec.onend = null; try { call.rec.stop(); } catch {} call.rec = null; }
   setCall(false); setPhase("ended");
   if (!state.callHist.some((h) => h.who === "user")) {
@@ -448,12 +561,47 @@ function connectStream() {
   const es = new EventSource("/api/stream");
   es.onmessage = (e) => {
     const d = JSON.parse(e.data);
+    if (d.type === "phone") return phoneUpdate(d);
     if (d.glid === state.glid && d.md) showDoc(d, true);
   };
 }
+/* ---------------- real phone call (Sarvam Voice Agents · Instant Outbound) ---------------- */
+const PHONE_STATUS = { connected: "answered", no_answer: "not answered", busy: "line busy", failed: "could not be placed" };
+const phoneSeen = new Set();
+function phoneUpdate(d) {
+  if (d.glid !== state.glid) return;
+  const key = `${d.attempt_id}:${d.status}:${d.version || ""}`;
+  if (phoneSeen.has(key)) return;
+  phoneSeen.add(key);
+  if (d.status === "dialing") { bubble("callLog", "system", `Payal is ringing ${d.phone} from Sarvam Voice Agents…`, `attempt ${d.attempt_id.slice(0, 8)}`); return; }
+  const dur = d.duration ? ` · ${Math.round(d.duration)} s` : "";
+  bubble("callLog", "system", `Phone call ${PHONE_STATUS[d.status] || d.status}${d.failure_reason ? " — " + d.failure_reason : ""}`, `Sarvam phone call${dur}`);
+  if (d.summary) bubble("callLog", "system", `Saved to memory: ${d.summary.disposition} — ${d.summary.summary}`, `file v${d.version}`);
+}
+function setupPhone(p) {
+  const ready = p && p.ready;
+  $("phoneBtn").disabled = !ready;
+  $("phoneForm").title = ready ? `Payal rings this number from ${p.agent_phone_number}${p.webhook ? "" : " (no public_url: outcome saved by the agent's on_end tool)"}`
+    : "Phone calls need: " + ((p && p.missing) || []).join(", ") + " — see config.yaml → samvaad";
+}
+$("phoneForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const phone = $("phoneNum").value.trim();
+  if (!phone || !state.glid) return;
+  $("phoneBtn").disabled = true;
+  try {
+    const r = await api("/api/phone-call", { glid: state.glid, phone });
+    phoneUpdate({ ...r, glid: state.glid });
+  } catch (err) { bubble("callLog", "system", "Phone call not placed: " + err.message); }
+  finally { $("phoneBtn").disabled = false; }
+});
+
 async function loadStatus() {
   const s = await api("/api/status");
+  setupPhone(s.samvaad && s.samvaad.phone);
   state.modes = s.modes;
+  state.samvaad = s.samvaad;
+  $("engineToggleWrap").hidden = !(s.samvaad && s.samvaad.configured && window.SarvamConvAI);
   const chip = (label, val, live) => `<span class="chip ${live ? "live" : "off"}">${label}: ${val}</span>`;
   $("status").innerHTML =
     chip("LLM", s.modes.llm === "sarvam" ? "Sarvam-105B" : s.modes.llm, s.modes.llm !== "offline") +
