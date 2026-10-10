@@ -38,6 +38,7 @@ from . import __version__
 from . import seller_sections as S
 from .agent import MOOD_PACE, Agent, detect_lang, detect_mood, requested_lang
 from .config import ROOT, get_config
+from .pronounce import for_tts
 from .engine import ContextEngine
 from . import samvaad
 from .sarvam import client as sarvam_client
@@ -441,8 +442,11 @@ def sarvam_context(glid: int):
     if hook:  # the agent reads {context}: tell it what to raise once the caller answers the greeting
         md += ("\n\n## Your first point — say this right after they answer your greeting (in their language)\n"
                f"> {hook}\n")
-    return {"glid": glid, "context_md": md, "opening_line": greeting, "first_point": hook, "language": op["lang"],
-            "version": d["version"]}
+    # the agent's own voice reads the greeting as written, so Roman "main" came out as the English word "main":
+    # respell the known words (main → मैं, IndiaMART → इंडियामार्ट) as our Bulbul path already does; the screen
+    # keeps the readable text
+    return {"glid": glid, "context_md": md, "opening_line": for_tts(greeting, op["lang"]), "opening_display": greeting,
+            "first_point": hook, "language": op["lang"], "version": d["version"]}
 
 
 class CallEnded(BaseModel):

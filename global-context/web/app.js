@@ -551,7 +551,7 @@ async function startSamvaadCall() {
     try {
       const ctx = await api("/sarvam/context?glid=" + encodeURIComponent(state.glid));
       Object.assign(vars, { context: ctx.context_md, opening: ctx.opening_line, language: ctx.language });
-      sv.opening = ctx.opening_line || "";
+      sv.opening = ctx.opening_display || ctx.opening_line || "";
       state.lang = ctx.language || "hi-IN";
     } catch (err) {
       bubble("callLog", "system", "Could not load the memory file — the agent will open cold: " + err.message);
