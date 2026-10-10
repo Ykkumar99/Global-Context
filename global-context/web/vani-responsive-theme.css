@@ -567,6 +567,12 @@ a:focus-visible {
   border-color: color-mix(in srgb, var(--wa) 35%, var(--line));
 }
 
+.wa .msg.bot .bubble,
+.voice .msg.bot .bubble {
+  color: var(--ink);
+  background: var(--surface);
+}
+
 .msg.system .bubble {
   color: var(--ink-2);
   background: transparent;
@@ -1153,7 +1159,7 @@ button:disabled {
 }
 
 .voice .chat {
-  min-height: 72px;
+  min-height: 160px;
   background: var(--surface-2);
   border-bottom: 1px solid var(--line);
 }
@@ -1237,8 +1243,20 @@ button:disabled {
   font-size: 10.5px;
 }
 
-/* Keep the complete dashboard inside normal desktop viewports. */
-@media (min-width: 1101px) {
+/* Keep the complete dashboard inside tall desktop viewports. Shorter laptop screens (768/900px) would
+   crush the call transcript, so there the page scrolls and the work panes get a fixed height instead. */
+@media (min-width: 1101px) and (max-height: 999px) {
+  html,
+  body {
+    height: auto;
+  }
+
+  .grid {
+    grid-template-rows: auto 820px;
+  }
+}
+
+@media (min-width: 1101px) and (min-height: 1000px) {
   html,
   body {
     height: 100%;
@@ -1324,7 +1342,7 @@ button:disabled {
 
   .voice {
     grid-column: 1 / -1;
-    min-height: 640px;
+    min-height: 780px;
   }
 
   .phone-shell {
