@@ -11,6 +11,8 @@
   segments                      WhatsApp-campaign segments read from the .md files → outputs/segments.csv
   brief   GLID                  executive call-prep page from the .md → outputs/briefs/GLID.html
   resume-eval [--n 12]          WhatsApp → voice resumption benchmark, memory on vs off
+  call    GLID PHONE [--lang]   Payal rings a real phone (Sarvam Instant Outbound) with GLID's memory loaded
+  say     TEXT [--lang] [--glid] speak one line both ways -> outputs/tts_ab/, to A/B the pronunciation lexicon
 """
 from __future__ import annotations
 
@@ -112,6 +114,57 @@ def cmd_resume(a) -> None:
                                    out_dir=cfg.path("out_dir")), indent=1))
 
 
+def cmd_call(a) -> None:
+    """Dial a real phone through Sarvam Instant Outbound with this GLID's memory loaded."""
+    from . import samvaad
+    from .agent import Agent
+    eng = _engine()
+    d = eng.get(int(a.glid))
+    op = Agent(eng).opening(int(a.glid), True)
+    ctx = {"context_md": d["md"], "opening_line": op["text"], "language": op["lang"]}
+    try:
+        rec = samvaad.place_call(eng.store, int(a.glid), a.phone, ctx, lang=a.lang)
+    except samvaad.OutboundError as e:
+        sys.exit(f"Call not placed: {e}")
+    print(f"Dialing {rec['phone']} · attempt {rec['attempt_id']}")
+    print(f"Opening line: {op['text']}")
+    if not rec["webhook"]:
+        print("No public_url set: the outcome will be written back only by the agent's on_end save_call tool.")
+    else:
+        print("Keep `python -m gcx serve` and the tunnel running — the webhook writes the outcome back.")
+
+
+def cmd_say(a) -> None:
+    """Synthesise one line twice — raw, and with the pronunciation lexicon applied — so the two can be
+    compared by ear. Only a listener can judge whether a respelling actually sounds better."""
+    from . import pronounce
+    from .sarvam import client as sarvam_client
+    s = sarvam_client()
+    if s.mode()["tts"] != "sarvam":
+        sys.exit("No SARVAM_API_KEY — nothing to synthesise.")
+    text = a.text
+    if a.glid:  # use this seller's real opening line instead of a typed one
+        from .agent import Agent
+        op = Agent(_engine()).opening(int(a.glid), True)
+        text, a.lang = op["text"], a.lang or op["lang"]
+    lang = a.lang or "hi-IN"
+    fixed = pronounce.for_tts(text, lang)
+    out = ROOT / "outputs" / "tts_ab"
+    out.mkdir(parents=True, exist_ok=True)
+    print(f"lang: {lang}\n  raw  : {text}\n  fixed: {fixed}")
+    if fixed == text:
+        print("\n(no lexicon term in this line — the two files would be identical)")
+    for name, t in (("raw", text), ("fixed", fixed)):
+        # bypass Sarvam.tts so the "raw" side really is unmodified
+        audio = s._tts_one(t, None, lang, None)
+        if not audio:
+            print(f"  {name}: FAILED — {s.last_error}")
+            continue
+        p = out / f"{name}.wav"
+        p.write_bytes(audio)
+        print(f"  {name}: {p}  ({len(audio)} bytes)")
+
+
 def cmd_slice(a) -> None:
     from .demo_slice import make_slice
     make_slice(Path(a.data), ROOT / "data" / "demo", n_random=a.n)
@@ -142,11 +195,14 @@ def main(argv=None) -> None:
     sub.add_parser("segments")
     s = sub.add_parser("brief"); s.add_argument("glid")
     s = sub.add_parser("resume-eval"); s.add_argument("--n", type=int, default=12)
+    s = sub.add_parser("call"); s.add_argument("glid"); s.add_argument("phone"); s.add_argument("--lang")
+    s = sub.add_parser("say"); s.add_argument("text", nargs="?", default=""); s.add_argument("--lang")
+    s.add_argument("--glid")
     a = p.parse_args(argv)
     load_config(a.config)
     {"ingest": cmd_ingest, "build": cmd_build, "show": cmd_show, "event": cmd_event, "setup": cmd_setup,
      "serve": cmd_serve, "eval": cmd_eval, "slice": cmd_slice, "segments": cmd_segments, "brief": cmd_brief,
-     "resume-eval": cmd_resume}[a.cmd](a)
+     "resume-eval": cmd_resume, "call": cmd_call, "say": cmd_say}[a.cmd](a)
 
 
 if __name__ == "__main__":

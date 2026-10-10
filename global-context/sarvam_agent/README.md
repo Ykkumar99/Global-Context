@@ -34,6 +34,34 @@ milliseconds and the next channel (WhatsApp, a second call) resumes from it.
 Start a test call with `glid = 146010610` (KPR Tempo Services). The agent should open by referring to the seller's
 WhatsApp question instead of the generic pitch.
 
+## 5. Real phone calls (Instant Outbound)
+Payal can ring a real phone with the seller's memory already loaded — no campaign needed.
+
+1. **Phone number:** indus.sarvam.ai → Deploy → Phone Numbers. Copy the number's **connection ID** and the number
+   itself (E.164) into `config.yaml → samvaad.connection_id / agent_phone_number`. Check `app_version` matches the
+   committed version of the agent.
+2. **Webhook:** start the tunnel and export its URL before `serve`:
+   ```bash
+   cloudflared tunnel --url http://localhost:8000          # copy the https://….trycloudflare.com URL
+   GCX_PUBLIC_URL=https://….trycloudflare.com python -m gcx serve
+   ```
+3. **Call:** in the UI, type a number under the voice pane → **Call phone**, or from a shell:
+   `python -m gcx call 146010610 98xxxxxxxx [--lang gu-IN]`
+
+What happens:
+- `POST https://apps.sarvam.ai/api/outbounds/v1/orgs/{org}/workspaces/{ws}/outbounds` with agent variables
+  `glid`, `context` (the .md), `opening`, `language` — so the greeting is personalised even if `load_context` can't
+  reach the tunnel — plus `initial_language_name` from the file and a `webhook_config` carrying the GLID.
+- After the call Sarvam POSTs `{attempt_id, status, duration, interaction_transcript, …}` to
+  `/sarvam/outbound-webhook?token=…`. A **connected** call is summarised and written to the memory file
+  (`voice_call`, agent "Sarvam phone call", with `attempt_id` / `interaction_id`); the UI shows it live.
+- **no_answer / busy / failed** are shown in the UI but not written to memory — a `voice_call` event would be read
+  as an answered call and close the seller's open WhatsApp question.
+- While a phone call is pending, the agent's own `save_call` (on_end) is skipped for that GLID so the call is never
+  written twice; webhook retries are ignored per `attempt_id`. Without `GCX_PUBLIC_URL` no webhook is sent and
+  `save_call` writes the call back as before.
+- `/api/phone-call` is local-only (the tunnel guard returns 403), so nobody outside can dial through the demo.
+
 ## Our deployed agent (hackathon build)
 
 | | |
